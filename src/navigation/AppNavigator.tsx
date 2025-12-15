@@ -1,66 +1,134 @@
 import React from "react";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { NavigationContainer } from "@react-navigation/native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { View } from "react-native";
 
-// Screens principales
 import InicioScreen from "../screens/InicioScreen";
 import ReportesScreen from "../screens/ReportesScreen";
-
-// STACKS
 import GestionTomasStack from "./GestionTomasStack";
-import DatosCampoStack from "./DatosCampoStack";  // ← NUEVO
+import DatosCampoStack from "./DatosCampoStack";
+import ConsultasMantenedoresStack from "./ConsultasMantenedoresStack";
 
 const Tab = createBottomTabNavigator();
 
-type Props = {
-  onLogout: () => void;
-};
+type Props = { onLogout: () => void };
 
 const AppNavigator: React.FC<Props> = ({ onLogout }) => {
   return (
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: "#234d20",
-            borderTopWidth: 0,
-            height: 65,
-          },
-          tabBarActiveTintColor: "#ffffff",
-          tabBarInactiveTintColor: "#c7e6b9",
-          tabBarLabelStyle: {
-            fontSize: 14,
-            fontWeight: "600",
-          },
-        }}
-      >
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#234d20" }}>
+      <NavigationContainer>
+        <Tab.Navigator
+          screenOptions={{
+            headerShown: false,
 
-        {/* INICIO */}
-        <Tab.Screen name="Inicio">
-          {() => <InicioScreen onLogout={onLogout} />}
-        </Tab.Screen>
+            tabBarItemStyle: {
+              justifyContent: "center",
+              alignItems: "center",
+            },
 
-        {/* PROCESOS → STACK DE TOMAS */}
-        <Tab.Screen 
-          name="Procesos" 
-          component={GestionTomasStack} 
-        />
+            tabBarIconStyle: {
+              width: 30,
+              height: 26,
+              justifyContent: "center",
+              alignItems: "center",
+              marginBottom: -2,
+            },
 
-        {/* DATOS DE CAMPO → STACK OCULTO */}
-        <Tab.Screen
-          name="DatosCampo"
-          component={DatosCampoStack}
-          options={{
-            tabBarButton: () => null,    // ← OCULTA EL TAB
+            tabBarLabelStyle: {
+              fontSize: 13,
+              fontWeight: "600",
+              marginTop: -2,
+            },
+
+            tabBarStyle: {
+              backgroundColor: "#1e4020",
+              borderTopWidth: 0,
+              height: 68,
+              paddingBottom: 8,
+              paddingTop: 6,
+              elevation: 12,
+            },
+
+            tabBarActiveTintColor: "#ffffff",
+            tabBarInactiveTintColor: "#9abfa4",
           }}
-        />
+        >
 
-        {/* REPORTES */}
-        <Tab.Screen name="Reportes" component={ReportesScreen} />
+          {/* 🟢 INICIO */}
+          <Tab.Screen
+            name="Inicio"
+            options={{
+              tabBarIcon: ({ color }) => (
+                <View style={{ width: 30, alignItems: "center" }}>
+                  <Icon name="sprout" size={22} color={color} />
+                </View>
+              ),
+            }}
+          >
+            {() => <InicioScreen onLogout={onLogout} />}
+          </Tab.Screen>
 
-      </Tab.Navigator>
-    </NavigationContainer>
+          {/* 🟢 PROCESOS */}
+          <Tab.Screen
+            name="Procesos"
+            component={GestionTomasStack}
+            options={{
+              tabBarIcon: ({ color }) => (
+                <View style={{ width: 30, alignItems: "center" }}>
+                  <Icon name="file-tree" size={22} color={color} />
+                </View>
+              ),
+            }}
+          />
+
+          {/* 🔵 DATOS CAMPO (OCULTO – YA NO RESERVA ESPACIO) */}
+          <Tab.Screen
+            name="DatosCampo"
+            component={DatosCampoStack}
+            options={{
+              tabBarButton: () => null,
+              tabBarStyle: { display: "none" },  // 🔥 ELIMINA ESPACIO FANTASMA
+              tabBarIcon: ({ color }) => (
+                <View style={{ width: 30, alignItems: "center" }}>
+                  <Icon name="account-hard-hat" size={22} color={color} />
+                </View>
+              ),
+            }}
+          />
+
+          {/* 🔵 CONSULTAS (OCULTO – YA NO RESERVA ESPACIO) */}
+          <Tab.Screen
+            name="ConsultasMantenedores"
+            component={ConsultasMantenedoresStack}
+            options={{
+              tabBarButton: () => null,
+              tabBarStyle: { display: "none" }, // 🔥 ELIMINA ESPACIO FANTASMA
+              tabBarIcon: ({ color }) => (
+                <View style={{ width: 30, alignItems: "center" }}>
+                  <Icon name="database-cog" size={22} color={color} />
+                </View>
+              ),
+            }}
+          />
+
+          {/* 🟢 REPORTES */}
+          <Tab.Screen
+            name="Reportes"
+            component={ReportesScreen}
+            options={{
+              tabBarIcon: ({ color }) => (
+                <View style={{ width: 30, alignItems: "center" }}>
+                  <Icon name="chart-line" size={22} color={color} />
+                </View>
+              ),
+            }}
+          />
+
+        </Tab.Navigator>
+      </NavigationContainer>
+    </SafeAreaView>
   );
 };
 

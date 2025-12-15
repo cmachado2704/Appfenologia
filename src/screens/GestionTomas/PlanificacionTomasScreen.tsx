@@ -7,10 +7,26 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { supabase } from "../../services/supabaseClient";
-import { useNavigation } from "@react-navigation/native";
 
-// Calcular semana ISO
+import { supabase } from "../../services/supabaseClient";
+
+/* ============================================================
+   TIPOS
+============================================================ */
+type ConteoTipos = Record<string, number>;
+
+interface Toma {
+  n_de_toma: string;
+  nombre_lote: string;
+  fecha_creacion: string;
+  fecha_fin: string;
+  muestra_sugerida: number;
+  tipo_toma: string | null;
+}
+
+/* ============================================================
+   UTILIDADES
+============================================================ */
 const getISOWeek = (date: Date) => {
   const tmp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = tmp.getUTCDay() || 7;
@@ -19,182 +35,453 @@ const getISOWeek = (date: Date) => {
   return Math.ceil(((tmp.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 };
 
-// Formato bonito: DD/MM/YYYY
-const formatDate = (fecha: string) => {
+const formatDate = (fecha: string | null) => {
   if (!fecha) return "";
   const d = new Date(fecha);
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}/${d.getFullYear()}`;
 };
 
-const PlanificacionTomasScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const [loading, setLoading] = useState(true);
-  const [tomas, setTomas] = useState<any[]>([]);
-  const [week, setWeek] = useState<number>(getISOWeek(new Date()));
+const calcularEstado = (fi: Date, ff: Date, ejecutado: number, plan: number) => {
+  const hoy = new Date();
+  if (plan > 0 && ejecutado >= plan) return "completada";
+  if (hoy >= fi && hoy <= ff) return "en_proceso";
+  if (hoy > ff && ejecutado > 0) return "retrasada";
+  if (hoy > ff && ejecutado === 0) return "vencida";
+  return "creada";
+};
 
+const estadoColor = (estado: string) => {
+  switch (estado) {
+    case "completada": return "#2e7d32";
+    case "en_proceso": return "#fdd835";
+    case "retrasada": return "#fb8c00";
+    case "vencida": return "#d32f2f";
+    default: return "#9e9e9e";
+  }
+};
+
+/* ============================================================
+   COMPONENTE PRINCIPAL
+============================================================ */
+const PlanificacionTomasScreen = () => {
+  const [loading, setLoading] = useState(false);
+
+  /* DETALLADA */
+  const [week, setWeek] = useState(getISOWeek(new Date()));
+
+  /* CONSOLIDADA */
+  const [vista, setVista] = useState<"detallada" | "consolidada">("detallada");
+  const [modoConsolidado, setModoConsolidado] = useState<"mensual" | "anual">("mensual");
+
+  const [mes, setMes] = useState(new Date().getMonth() + 1); // 1–12
+  const [ano, setAno] = useState(new Date().getFullYear());
+
+  const [tomas, setTomas] = useState<any[]>([]);
+
+  /* ============================================================
+     CARGA DE TOMAS
+  ============================================================ */
   useEffect(() => {
     cargarTomas();
-  }, [week]);
+  }, []);
 
   const cargarTomas = async () => {
     try {
       setLoading(true);
 
-      const { data: tomasData, error: errorTomas } = await supabase
-        .from("tomas")
-        .select("*");
+      const { data: tomasData } = await supabase.from("tomas").select("*");
 
-      if (errorTomas) throw errorTomas;
+      const { data: fenData } = await supabase.from("tomas_fenologicas").select("n_de_toma");
+      const { data: calData } = await supabase.from("calibracion_frutos").select("n_de_toma");
+      const { data: conData } = await supabase.from("conteo_frutos_caidos").select("n_de_toma");
 
-      const { data: fenData, error: errorFen } = await supabase
-        .from("tomas_fenologicas")
-        .select("n_de_toma");
+      const ejecutFen: ConteoTipos = {};
+      const ejecutCal: ConteoTipos = {};
+      const ejecutCon: ConteoTipos = {};
 
-      if (errorFen) throw errorFen;
+      fenData?.forEach((f) => (ejecutFen[f.n_de_toma] = (ejecutFen[f.n_de_toma] || 0) + 1));
+      calData?.forEach((f) => (ejecutCal[f.n_de_toma] = (ejecutCal[f.n_de_toma] || 0) + 1));
+      conData?.forEach((f) => (ejecutCon[f.n_de_toma] = (ejecutCon[f.n_de_toma] || 0) + 1));
 
-      // Ejecutado por toma
-      const ejecutados: Record<string, number> = {};
-      fenData?.forEach((f) => {
-        ejecutados[f.n_de_toma] = (ejecutados[f.n_de_toma] || 0) + 1;
-      });
-
-      // Filtrar por semana ISO
-      const filtradas = tomasData?.filter((t) => {
+      const enriquecidas = tomasData?.map((t: any) => {
         const fi = new Date(t.fecha_creacion);
         const ff = new Date(t.fecha_fin);
-        const w1 = getISOWeek(fi);
-        const w2 = getISOWeek(ff);
-        return w1 === week || w2 === week;
+        const plan = Number(t.muestra_sugerida || 0);
+
+        let ejecutado = 0;
+        const tipo = t.tipo_toma || "sin_tipo";
+
+        if (tipo === "fenologica") ejecutado = ejecutFen[t.n_de_toma] || 0;
+        else if (tipo === "conteo") ejecutado = ejecutCon[t.n_de_toma] || 0;
+        else if (tipo === "calibracion") ejecutado = ejecutCal[t.n_de_toma] || 0;
+        else if (tipo === "generica")
+          ejecutado =
+            (ejecutFen[t.n_de_toma] || 0) +
+            (ejecutCal[t.n_de_toma] || 0) +
+            (ejecutCon[t.n_de_toma] || 0);
+
+        const cumplimiento = plan > 0 ? Math.round((ejecutado / plan) * 100) : 0;
+        const estado = calcularEstado(fi, ff, ejecutado, plan);
+
+        return { ...t, plan, ejecutado, cumplimiento, estado };
       });
 
-      // Enriquecer y ordenar
-      const completas = filtradas
-        ?.map((t) => {
-          const plan = Number(t.muestra_sugerida || 0);
-          const ejec = ejecutados[t.n_de_toma] || 0;
-          const cumplimiento = plan > 0 ? Math.round((ejec / plan) * 100) : 0;
-
-          const hoy = new Date();
-          const fi = new Date(t.fecha_creacion);
-          const ff = new Date(t.fecha_fin);
-
-          let estado = "creada";
-          if (cumplimiento === 100) estado = "completada";
-          else if (hoy >= fi && hoy <= ff) estado = "en_proceso";
-          else if (hoy > ff && ejec > 0) estado = "retrasada";
-          else if (hoy > ff && ejec === 0) estado = "vencida";
-
-          return {
-            ...t,
-            plan,
-            ejec,
-            cumplimiento,
-            estado,
-          };
-        })
-        .sort(
-          (a, b) =>
-            new Date(a.fecha_creacion).getTime() -
-            new Date(b.fecha_creacion).getTime()
-        );
-
-      setTomas(completas || []);
-    } catch (err) {
-      console.error("Error:", err);
+      setTomas(enriquecidas || []);
     } finally {
       setLoading(false);
     }
   };
 
-  const cambiarSemana = (delta: number) => setWeek(week + delta);
+  /* ============================================================
+     RESUMEN MENSUAL
+============================================================ */
+  const resumenMensual = (() => {
+    const delMes = tomas.filter((t) => {
+      const f = new Date(t.fecha_creacion);
+      return f.getFullYear() === ano && f.getMonth() + 1 === mes;
+    });
 
-  const colorEstado = (estado: string) => {
-    switch (estado) {
-      case "completada":
-        return "#2e7d32";
-      case "en_proceso":
-        return "#fdd835";
-      case "retrasada":
-        return "#fb8c00";
-      case "vencida":
-        return "#d32f2f";
-      default:
-        return "#9e9e9e";
-    }
-  };
+    const total = delMes.length;
+    const plan = delMes.reduce((acc, t) => acc + t.plan, 0);
+    const ejecutado = delMes.reduce((acc, t) => acc + t.ejecutado, 0);
 
+    const tipos: ConteoTipos = {};
+    delMes.forEach((t) => {
+      const key = t.tipo_toma || "sin_tipo";
+      tipos[key] = (tipos[key] || 0) + 1;
+    });
+
+    return { total, plan, ejecutado, tipos };
+  })();
+
+  /* ============================================================
+     RESUMEN ANUAL
+============================================================ */
+  const resumenAnual = (() => {
+    const delAno = tomas.filter((t) => {
+      const f = new Date(t.fecha_creacion);
+      return f.getFullYear() === ano;
+    });
+
+    const total = delAno.length;
+    const plan = delAno.reduce((acc, t) => acc + t.plan, 0);
+    const ejecutado = delAno.reduce((acc, t) => acc + t.ejecutado, 0);
+
+    const tipos: ConteoTipos = {};
+    delAno.forEach((t) => {
+      const key = t.tipo_toma || "sin_tipo";
+      tipos[key] = (tipos[key] || 0) + 1;
+    });
+
+    return { total, plan, ejecutado, tipos };
+  })();
+
+  /* ============================================================
+     SEMANAS DEL MES (opción B: solo si fecha_creación es del mes)
+============================================================ */
+  const semanasDelMes = (() => {
+    const mapa: Record<number, number> = {};
+
+    tomas.forEach((t) => {
+      const f = new Date(t.fecha_creacion);
+      if (f.getFullYear() === ano && f.getMonth() + 1 === mes) {
+        const w = getISOWeek(f);
+        mapa[w] = (mapa[w] || 0) + 1;
+      }
+    });
+
+    return Object.keys(mapa).map((wk) => ({
+      semana: Number(wk),
+      cantidad: mapa[Number(wk)],
+    }));
+  })();
+
+  /* ============================================================
+     MESES DEL AÑO (conteo simple)
+============================================================ */
+  const mesesDelAno = (() => {
+    const mapa: Record<number, number> = {};
+
+    tomas.forEach((t) => {
+      const f = new Date(t.fecha_creacion);
+      if (f.getFullYear() === ano) {
+        const m = f.getMonth() + 1;
+        mapa[m] = (mapa[m] || 0) + 1;
+      }
+    });
+
+    return Object.keys(mapa).map((m) => ({
+      mes: Number(m),
+      cantidad: mapa[Number(m)],
+    }));
+  })();
+
+  /* ============================================================
+     TARJETA DETALLADA (igual que antes)
+============================================================ */
+  const TarjetaDetalle = ({ t }: any) => (
+    <View style={styles.card}>
+      <Text style={styles.cardTitle}>{t.n_de_toma} — {t.nombre_lote}</Text>
+
+      <Text style={styles.cardSubtitle}>
+        Tipo: {(t.tipo_toma || "SIN_TIPO").toUpperCase()}
+      </Text>
+
+      <Text style={styles.cardText}>
+        {formatDate(t.fecha_creacion)} → {formatDate(t.fecha_fin)}
+      </Text>
+
+      <Text style={styles.cardText}>Plan: {t.plan}</Text>
+      <Text style={styles.cardText}>Ejecutado: {t.ejecutado}</Text>
+
+      <View style={styles.progressBackground}>
+        <View style={[styles.progressBar, { width: `${t.cumplimiento}%` }]} />
+      </View>
+
+      <Text style={styles.cardText}>Cumplimiento: {t.cumplimiento}%</Text>
+
+      <View style={[styles.badge, { backgroundColor: estadoColor(t.estado) }]}>
+        <Text style={styles.badgeText}>{t.estado.toUpperCase()}</Text>
+      </View>
+    </View>
+  );
+
+  /* ============================================================
+     RENDER PRINCIPAL
+============================================================ */
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Planificación de Tomas</Text>
+      <Text style={styles.title}>Plan y cumplimiento de tomas</Text>
 
-      {/* SELECTOR DE SEMANA */}
-      <View style={styles.weekSelector}>
-        <TouchableOpacity onPress={() => cambiarSemana(-1)}>
-          <Text style={styles.weekArrow}>{"<"}</Text>
+      {/* TOGGLE DETALLADA / CONSOLIDADA */}
+      <View style={styles.toggleContainer}>
+        <TouchableOpacity
+          style={[styles.toggleBtn, vista === "detallada" && styles.toggleActive]}
+          onPress={() => setVista("detallada")}
+        >
+          <Text style={styles.toggleText}>Detallada</Text>
         </TouchableOpacity>
 
-        <Text style={styles.weekLabel}>Semana {week}</Text>
-
-        <TouchableOpacity onPress={() => cambiarSemana(1)}>
-          <Text style={styles.weekArrow}>{">"}</Text>
+        <TouchableOpacity
+          style={[styles.toggleBtn, vista === "consolidada" && styles.toggleActive]}
+          onPress={() => setVista("consolidada")}
+        >
+          <Text style={styles.toggleText}>Consolidada</Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#ffffff" />
+        <ActivityIndicator size="large" color="#fff" />
+      ) : vista === "detallada" ? (
+        /* ============================================================
+           VISTA DETALLADA — POR SEMANAS (no cambia)
+        ============================================================ */
+        <>
+          <View style={styles.weekSelector}>
+            <TouchableOpacity onPress={() => setWeek(week - 1)}>
+              <Text style={styles.weekArrow}>{"<"}</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.weekLabel}>Semana {week}</Text>
+
+            <TouchableOpacity onPress={() => setWeek(week + 1)}>
+              <Text style={styles.weekArrow}>{">"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ marginTop: 10 }}>
+            {tomas
+              .filter((t) => getISOWeek(new Date(t.fecha_creacion)) === week)
+              .map((t) => (
+                <TarjetaDetalle key={t.n_de_toma} t={t} />
+              ))}
+          </ScrollView>
+        </>
       ) : (
+        /* ============================================================
+           VISTA CONSOLIDADA — MENSUAL / ANUAL
+        ============================================================ */
         <ScrollView style={{ marginTop: 10 }}>
-          {tomas.length === 0 && (
-            <Text style={{ color: "#fff", textAlign: "center", marginTop: 20 }}>
-              No hay tomas planificadas para esta semana.
-            </Text>
+          {/* SUB-TOGGLE */}
+          <View style={styles.subToggleContainer}>
+            <TouchableOpacity
+              style={[styles.subToggleBtn, modoConsolidado === "mensual" && styles.subToggleActive]}
+              onPress={() => setModoConsolidado("mensual")}
+            >
+              <Text style={styles.subToggleText}>Mensual</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.subToggleBtn, modoConsolidado === "anual" && styles.subToggleActive]}
+              onPress={() => setModoConsolidado("anual")}
+            >
+              <Text style={styles.subToggleText}>Anual</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ============================================================
+             CONSOLIDADO MENSUAL
+          ============================================================ */}
+          {modoConsolidado === "mensual" && (
+            <>
+              {/* Selector mes */}
+              <View style={styles.monthSelector}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (mes === 1) {
+                      setMes(12);
+                      setAno(ano - 1);
+                    } else setMes(mes - 1);
+                  }}
+                >
+                  <Text style={styles.weekArrow}>{"<"}</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.weekLabel}>
+                  {new Date(ano, mes - 1).toLocaleString("es-ES", {
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (mes === 12) {
+                      setMes(1);
+                      setAno(ano + 1);
+                    } else setMes(mes + 1);
+                  }}
+                >
+                  <Text style={styles.weekArrow}>{">"}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* RESUMEN MENSUAL */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Resumen mensual</Text>
+                <Text style={styles.cardText}>Tomas creadas: {resumenMensual.total}</Text>
+                <Text style={styles.cardText}>Plan total: {resumenMensual.plan}</Text>
+                <Text style={styles.cardText}>Ejecutado total: {resumenMensual.ejecutado}</Text>
+
+                <View style={styles.progressBackground}>
+                  <View
+                    style={[
+                      styles.progressBar,
+                      {
+                        width: `${
+                          resumenMensual.plan > 0
+                            ? Math.round((resumenMensual.ejecutado / resumenMensual.plan) * 100)
+                            : 0
+                        }%`,
+                      },
+                    ]}
+                  />
+                </View>
+
+                <Text style={styles.cardText}>Tipos de toma</Text>
+                {Object.entries(resumenMensual.tipos).map(([tipo, cant]) => (
+                  <Text key={tipo} style={styles.cardText}>
+                    {tipo}: {cant}
+                  </Text>
+                ))}
+              </View>
+
+              {/* SEMANAS DEL MES */}
+              <Text style={styles.sectionTitle}>Semanas del mes</Text>
+
+              {semanasDelMes.map((w) => (
+                <View key={w.semana} style={{ marginBottom: 12 }}>
+                  <Text style={styles.weekText}>Semana {w.semana}</Text>
+
+                  <View style={styles.progressBackground}>
+                    <View
+                      style={[
+                        styles.progressBar,
+                        { width: `${(w.cantidad / resumenMensual.total) * 100}%` },
+                      ]}
+                    />
+                  </View>
+
+                  <Text style={styles.cardText}>{w.cantidad} tomas</Text>
+                </View>
+              ))}
+            </>
           )}
 
-          {tomas.map((t) => (
-            <View key={t.n_de_toma} style={styles.card}>
-              <Text style={styles.cardTitle}>
-                {t.n_de_toma} — {t.nombre_lote}
-              </Text>
+          {/* ============================================================
+             CONSOLIDADO ANUAL
+          ============================================================ */}
+          {modoConsolidado === "anual" && (
+            <>
+              {/* Selector año */}
+              <View style={styles.monthSelector}>
+                <TouchableOpacity onPress={() => setAno(ano - 1)}>
+                  <Text style={styles.weekArrow}>{"<"}</Text>
+                </TouchableOpacity>
 
-              <Text style={styles.cardText}>
-                {formatDate(t.fecha_creacion)} → {formatDate(t.fecha_fin)}
-              </Text>
+                <Text style={styles.weekLabel}>{ano}</Text>
 
-              <Text style={styles.cardText}>
-                Planificado: {t.plan}   •   Ejecutado: {t.ejec}
-              </Text>
-
-              <View style={styles.progressBackground}>
-                <View
-                  style={[styles.progressBar, { width: `${t.cumplimiento}%` }]}
-                />
+                <TouchableOpacity onPress={() => setAno(ano + 1)}>
+                  <Text style={styles.weekArrow}>{">"}</Text>
+                </TouchableOpacity>
               </View>
 
-              <Text style={styles.cardText}>
-                Cumplimiento: {t.cumplimiento}%
-              </Text>
+              {/* RESUMEN ANUAL */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Resumen anual</Text>
+                <Text style={styles.cardText}>Tomas creadas: {resumenAnual.total}</Text>
+                <Text style={styles.cardText}>Plan total: {resumenAnual.plan}</Text>
+                <Text style={styles.cardText}>Ejecutado total: {resumenAnual.ejecutado}</Text>
 
-              <View
-                style={[styles.badge, { backgroundColor: colorEstado(t.estado) }]}
-              >
-                <Text style={styles.badgeText}>{t.estado.toUpperCase()}</Text>
+                <View style={styles.progressBackground}>
+                  <View
+                    style={[
+                      styles.progressBar,
+                      {
+                        width: `${
+                          resumenAnual.plan > 0
+                            ? Math.round((resumenAnual.ejecutado / resumenAnual.plan) * 100)
+                            : 0
+                        }%`,
+                      },
+                    ]}
+                  />
+                </View>
+
+                <Text style={styles.cardText}>Tipos de toma</Text>
+                {Object.entries(resumenAnual.tipos).map(([tipo, cant]) => (
+                  <Text key={tipo} style={styles.cardText}>
+                    {tipo}: {cant}
+                  </Text>
+                ))}
               </View>
 
-              <TouchableOpacity
-                style={styles.detailButton}
-                onPress={() =>
-                  navigation.navigate("AprobarEditarTomas" as any, {
-                    codigo: t.n_de_toma,
-                  })
-                }
-              >
-                <Text style={styles.detailText}>Ver detalle →</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
+              {/* MESES DEL AÑO */}
+              <Text style={styles.sectionTitle}>Meses del año</Text>
+
+              {mesesDelAno.map((m) => (
+                <View key={m.mes} style={{ marginBottom: 12 }}>
+                  <Text style={styles.weekText}>
+                    {new Date(ano, m.mes - 1).toLocaleString("es-ES", { month: "long" })}
+                  </Text>
+
+                  <View style={styles.progressBackground}>
+                    <View
+                      style={[
+                        styles.progressBar,
+                        { width: `${(m.cantidad / resumenAnual.total) * 100}%` },
+                      ]}
+                    />
+                  </View>
+
+                  <Text style={styles.cardText}>{m.cantidad} tomas</Text>
+                </View>
+              ))}
+            </>
+          )}
         </ScrollView>
       )}
     </View>
@@ -203,6 +490,9 @@ const PlanificacionTomasScreen: React.FC = () => {
 
 export default PlanificacionTomasScreen;
 
+/* ============================================================
+   ESTILOS
+============================================================ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -215,12 +505,54 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "700",
     textAlign: "center",
+    marginBottom: 10,
   },
+
+  toggleContainer: {
+    flexDirection: "row",
+  },
+  toggleBtn: {
+    flex: 1,
+    backgroundColor: "#466b52",
+    paddingVertical: 10,
+    margin: 5,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  toggleActive: {
+    backgroundColor: "#63a46c",
+  },
+  toggleText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
+  subToggleContainer: {
+    flexDirection: "row",
+    marginBottom: 15,
+  },
+  subToggleBtn: {
+    flex: 1,
+    backgroundColor: "#466b52",
+    paddingVertical: 8,
+    marginHorizontal: 5,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  subToggleActive: {
+    backgroundColor: "#63a46c",
+  },
+  subToggleText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+
   weekSelector: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 15,
+    marginBottom: 10,
   },
   weekArrow: {
     color: "#fff",
@@ -232,51 +564,74 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
   },
+
+  monthSelector: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 12,
+    alignItems: "center",
+  },
+
+  /* TARJETAS */
   card: {
     backgroundColor: "#e8f3eb",
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 20,
-    elevation: 2,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 14,
   },
   cardTitle: {
     color: "#234d20",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
   },
-  cardText: {
+  cardSubtitle: {
     color: "#234d20",
-    marginTop: 6,
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
   },
+  cardText: {
+    color: "#34204dff",
+    marginTop: 4,
+    fontSize: 13,
+  },
+
   progressBackground: {
-    height: 10,
+    height: 8,
     backgroundColor: "#cfd8dc",
     borderRadius: 6,
-    marginTop: 10,
+    marginTop: 8,
     overflow: "hidden",
   },
   progressBar: {
-    height: 10,
+    height: 8,
     backgroundColor: "#4caf50",
   },
+
+  sectionTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+    marginVertical: 10,
+    textAlign: "center",
+  },
+
+  weekText: {
+    color: "#fff",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+
   badge: {
     alignSelf: "flex-start",
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   badgeText: {
     color: "#fff",
     fontWeight: "700",
-  },
-  detailButton: {
-    marginTop: 14,
-  },
-  detailText: {
-    color: "#1b5e20",
-    fontWeight: "700",
-    fontSize: 15,
+    fontSize: 12,
   },
 });

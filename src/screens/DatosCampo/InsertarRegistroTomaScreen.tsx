@@ -17,7 +17,20 @@ import { tomarFoto } from "../../utils/photoPicker";
 import { subirFotoSupabase } from "../../utils/uploadPhoto";
 import NetInfo from "@react-native-community/netinfo";
 import { addToOfflineQueue } from "../../utils/offlineQueue";
-import { getWeather } from "../../utils/weather";
+import { getCurrentPosition } from "../../utils/location";
+import { CatalogCache } from "../../utils/catalogCache";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const normalizeKey = (value?: string) =>
+  value
+    ?.toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim() || "";
+/* ============================================================
+   TIPOS
+============================================================ */
 type Toma = {
   id_toma: number;
   n_de_toma: string;
@@ -26,37 +39,42 @@ type Toma = {
   muestra_sugerida: string | null;
   fundo: string | null;
   variedad: string | null;
+  tipo_toma?: string | null;
+  estado?: string | null;
 };
 
-// ZONAS (REAL)
 type Zona = {
   id_zona: number;
   nombre_zona: string;
 };
 
-// ORIENTACIONES (REAL)
 type Orientacion = {
   id_orientacion: number;
   nombre_orientacion: string;
 };
 
-// TIPO ESTADO (REAL)
 type TipoEstado = {
   codigo_estado: string;
   nombre_estado: string;
+  cultivo: string;
 };
 
 type RamaForm = {
-  n_rama: number;
+  n_rama: string;
   tipo_estado?: string;
   es_estado?: string;
   cantidad?: string;
 };
 
-const MAX_RAMAS = 5;
+/* ============================================================
+   CONFIG
+============================================================ */
+const MAX_RAMAS = 16;
 
 const InsertarRegistroTomaScreen: React.FC = () => {
-  // Búsqueda de tomas
+  /* ============================================================
+     ESTADOS PRINCIPALES
+  ============================================================ */
   const [searchField, setSearchField] = useState<"n_de_toma" | "nombre_lote">(
     "n_de_toma"
   );
@@ -65,15 +83,14 @@ const InsertarRegistroTomaScreen: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [selectedToma, setSelectedToma] = useState<Toma | null>(null);
 
-  // Catálogos reales
   const [zonas, setZonas] = useState<Zona[]>([]);
   const [orientaciones, setOrientaciones] = useState<Orientacion[]>([]);
   const [tiposEstado, setTiposEstado] = useState<TipoEstado[]>([]);
   const [isLoadingCatalogos, setIsLoadingCatalogos] = useState(false);
-// FOTOS (máx 2 por planta)
-const [foto1, setFoto1] = useState<string | null>(null);
-const [foto2, setFoto2] = useState<string | null>(null);
-  // Formulario
+
+  const [foto1, setFoto1] = useState<string | null>(null);
+  const [foto2, setFoto2] = useState<string | null>(null);
+
   const [zonaSeleccionada, setZonaSeleccionada] = useState<string | null>(null);
   const [fila, setFila] = useState("");
   const [orientacionSeleccionada, setOrientacionSeleccionada] =
@@ -86,83 +103,118 @@ const [foto2, setFoto2] = useState<string | null>(null);
   const [orientacionModalVisible, setOrientacionModalVisible] =
     useState(false);
 
-  // *** NUEVO MODAL DE ESTADOS (para cargar los >30 estados) ***
-  const [estadoModalVisible, setEstadoModalVisible] = useState(false);
-  const [ramaSeleccionada, setRamaSeleccionada] = useState<number | null>(null);
+  const [estadoModalRama, setEstadoModalRama] = useState<number | null>(null);
 
   const [planta, setPlanta] = useState("");
-const [estadoModalRama, setEstadoModalRama] = useState<number | null>(null);
+
   const [ramas, setRamas] = useState<RamaForm[]>(
-    Array.from({ length: MAX_RAMAS }, (_, idx) => ({
-      n_rama: idx + 1,
-    }))
+    Array.from({ length: MAX_RAMAS }, () => ({ n_rama: "" }))
   );
 
   const [isSaving, setIsSaving] = useState(false);
 
-  // TODO: usuario real luego
   const inspector = "INSPECTOR_DEMO";
 
-  // Geo pendiente
-  const [latitud] = useState<number | null>(null);
-  const [longitud] = useState<number | null>(null);
-
-  // ============================================================================
-  // 🔥 CARGA DE CATÁLOGOS (100% CORREGIDO Y SIN ALTERAR NADA MÁS)
-  // ============================================================================
+  /* ============================================================
+     CARGA DE CATÁLOGOS (ONLINE + CACHE)
+  ============================================================ */
+  const mapTiposEstado = (data: any[]) =>
+  data.map((t: any) => ({
+    codigo_estado: t.tipo_estado,
+    nombre_estado: t.es_estado,
+    cultivo: t.cultivo,
+  }));
 
   const loadCatalogos = useCallback(async () => {
     try {
       setIsLoadingCatalogos(true);
 
-      // ZONAS
-      const { data: zonasData, error: zonasError } = await supabase
+      const net = await NetInfo.fetch();
+      const isOnline = net.isConnected && net.isInternetReachable;
+
+      if (!isOnline) {
+        const zonasCache = await CatalogCache.loadZonas();
+        const oriCache = await CatalogCache.loadOrientaciones();
+        const tiposCache = await CatalogCache.loadTiposEstado();
+
+        if (
+          zonasCache?.length ||
+          oriCache?.length ||
+          tiposCache?.length
+        ) {
+          setZonas(zonasCache || []);
+          setOrientaciones(oriCache || []);
+          setTiposEstado(mapTiposEstado(tiposCache || []));
+          setIsLoadingCatalogos(false);
+          return;
+        }
+      }
+
+      const { data: zonasData } = await supabase
         .from("zonas")
         .select("id_zona, nombre_zona")
-        .order("nombre_zona", { ascending: true });
+        .order("nombre_zona");
 
-      if (zonasError) throw zonasError;
-
-      // ORIENTACIONES
-      const { data: oriData, error: oriError } = await supabase
+      const { data: oriData } = await supabase
         .from("orientaciones")
         .select("id_orientacion, nombre_orientacion")
-        .order("nombre_orientacion", { ascending: true });
+        .order("nombre_orientacion");
 
-      if (oriError) throw oriError;
-
-      // TIPOS ESTADO — columnas reales: tipo_estado / es_estado
-      const { data: tipoData, error: tipoError } = await supabase
+      const { data: tipoData } = await supabase
         .from("tipos_estado")
-        .select("tipo_estado, es_estado")
-        .order("es_estado", { ascending: true });
-
-      if (tipoError) throw tipoError;
+        .select("tipo_estado, es_estado, cultivo")
+        .order("es_estado");
 
       const estadosFormateados =
         tipoData?.map((t: any) => ({
           codigo_estado: t.tipo_estado,
-          nombre_estado: t.es_estado,
+          nombre_estado: t.es_estado, 
+          cultivo: t.cultivo,
         })) || [];
 
       setZonas(zonasData || []);
       setOrientaciones(oriData || []);
       setTiposEstado(estadosFormateados);
-    } catch (error: any) {
-      console.error("Error cargando catálogos", error);
-      Alert.alert("Error", "No se pudieron cargar los catálogos.");
+
+      await AsyncStorage.setItem("cache_zonas", JSON.stringify(zonasData || []));
+      await AsyncStorage.setItem(
+        "cache_orientaciones",
+        JSON.stringify(oriData || [])
+      );
+      await AsyncStorage.setItem(
+        "cache_tipos_estado",
+        JSON.stringify(estadosFormateados)
+      );
+    } catch (e) {
+      Alert.alert("Error", "No se lograron cargar los catálogos.");
     } finally {
       setIsLoadingCatalogos(false);
     }
   }, []);
 
   useEffect(() => {
+  const loadOfflineTipos = async () => {
+    try {
+      const raw = await AsyncStorage.getItem("cache_tipos_estado");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // ⭐ SIEMPRE setear, incluso si está vacío
+        setTiposEstado(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch (e) {
+      console.log("Error cargando tipos_estado offline:", e);
+    }
+  };
+  loadOfflineTipos();
+}, []);
+
+  useEffect(() => {
     loadCatalogos();
   }, [loadCatalogos]);
-  // ============================================================================
-  // 🔍 BÚSQUEDA DE TOMAS
-  // ============================================================================
 
+  /* ============================================================
+     BÚSQUEDA DE TOMAS ( online + orden por n_de_toma )
+  ============================================================ */
   const handleBuscarTomas = async () => {
     if (!searchTerm.trim()) {
       Alert.alert("Atención", "Ingresa un criterio de búsqueda.");
@@ -173,246 +225,240 @@ const [estadoModalRama, setEstadoModalRama] = useState<number | null>(null);
       setIsSearching(true);
       setSelectedToma(null);
 
-      const { data, error } = await supabase
-        .from("tomas")
-        .select(
-          "id_toma, n_de_toma, codigo_lote, nombre_lote, muestra_sugerida, fundo, variedad"
-        )
-        .ilike(searchField, `%${searchTerm.trim()}%`)
-        .order("fecha_creacion", { ascending: false })
-        .limit(30);
+      const net = await NetInfo.fetch();
+      const isOnline = net.isConnected && net.isInternetReachable;
 
-      if (error) throw error;
+      /* ------------------------------ ONLINE ------------------------------ */
+      if (isOnline) {
+        const { data, error } = await supabase
+          .from("tomas")
+          .select(
+            "id_toma, n_de_toma, codigo_lote, nombre_lote, muestra_sugerida, fundo, variedad, tipo_toma, estado"
+          )
+          .eq("tipo_toma", "fenologica")
+          .ilike(searchField, `%${searchTerm.trim()}%`)
+          .order("n_de_toma", { ascending: true })   // ← ORDEN CORREGIDO
+          .limit(50);
 
-      setTomasResults(data || []);
+        if (error) throw error;
 
-      if (!data || data.length === 0) {
-        Alert.alert("Sin resultados", "No se encontraron tomas.");
+        const filtradas = data?.filter((t: any) => t.estado === "creada") || [];
+
+        // Guarda en cache
+        await AsyncStorage.setItem("cache_tomas", JSON.stringify(filtradas));
+
+        setTomasResults(filtradas);
       }
-    } catch (error: any) {
-      console.error("Error buscando tomas", error);
+
+      /* ------------------------------ OFFLINE ------------------------------ */
+      else {
+        const cache = await CatalogCache.loadTomas();
+        const texto = searchTerm.trim().toLowerCase();
+
+        let filtradas =
+          cache
+            ?.filter((t: any) => t.tipo_toma === "fenologica")
+            ?.filter((t: any) => t.estado === "creada")
+            ?.filter((t: any) => {
+              if (searchField === "n_de_toma") {
+                return (t.n_de_toma || "").toLowerCase().includes(texto);
+              } else {
+                return (t.nombre_lote || "").toLowerCase().includes(texto);
+              }
+            }) || [];
+
+        // ← ORDENAR OFFLINE
+        filtradas = filtradas.sort((a: any, b:any) => {
+          const na = Number(a.n_de_toma) || 0;
+          const nb = Number(b.n_de_toma) || 0;
+          return na - nb;
+        });
+
+        setTomasResults(filtradas);
+      }
+    } catch (e) {
       Alert.alert("Error", "No se pudo realizar la búsqueda de tomas.");
     } finally {
       setIsSearching(false);
     }
   };
 
+  /* ============================================================
+     SELECCIONAR TOMA
+  ============================================================ */
   const handleSelectToma = (toma: Toma) => {
     setSelectedToma(toma);
-
     setZonaSeleccionada(null);
     setFila("");
     setOrientacionSeleccionada(null);
     setObservaciones("");
     setPlanta("");
 
-    setRamas(
-      Array.from({ length: MAX_RAMAS }, (_, idx) => ({
-        n_rama: idx + 1,
-      }))
-    );
+    setRamas(Array.from({ length: MAX_RAMAS }, () => ({ n_rama: "" })));
   };
 
-  // ============================================================================
-  // 🔽 REUTILIZABLE: Dropdown Modal (zonas / orientaciones)
-  // ============================================================================
+  /* ============================================================
+     MANEJO DE RAMAS
+  ============================================================ */
+  const handleChangeNumeroRama = (index: number, value: string) => {
+    const numeric = value.replace(/[^0-9]/g, "");
+    setRamas((prev) => {
+      const clone = [...prev];
+      clone[index].n_rama = numeric;
+      return clone;
+    });
+  };
 
-  const renderDropdownModal = (
-    visible: boolean,
-    onClose: () => void,
-    title: string,
-    options: { label: string; value: string }[],
-    onSelect: (value: string) => void
-  ) => (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>{title}</Text>
-
-          <FlatList
-            data={options}
-            keyExtractor={(item) => item.value}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.modalOption}
-                onPress={() => {
-                  onSelect(item.value);
-                  onClose();
-                }}
-              >
-                <Text style={styles.modalOptionText}>{item.label}</Text>
-              </TouchableOpacity>
-            )}
-          />
-
-          <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
-            <Text style={styles.modalCloseButtonText}>Cerrar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  // ============================================================================
-  // RAMAS: CAMBIOS LOCALES
-  // ============================================================================
-
-  const handleChangeTipoEstado = (n_rama: number, codigo_estado: string) => {
+  const handleChangeTipoEstado = (index: number, codigo_estado: string) => {
     const tipo = tiposEstado.find((t) => t.codigo_estado === codigo_estado);
-
-    setRamas((prev) =>
-      prev.map((r) =>
-        r.n_rama === n_rama
-          ? {
-              ...r,
-              tipo_estado: codigo_estado,
-              es_estado: tipo?.nombre_estado,
-            }
-          : r
-      )
-    );
+    setRamas((prev) => {
+      const clone = [...prev];
+      clone[index].tipo_estado = codigo_estado;
+      clone[index].es_estado = tipo?.nombre_estado;
+      return clone;
+    });
   };
 
-  const handleChangeCantidad = (n_rama: number, value: string) => {
+  const handleChangeCantidad = (index: number, value: string) => {
     const numericValue = value.replace(/[^0-9]/g, "");
-
-    setRamas((prev) =>
-      prev.map((r) =>
-        r.n_rama === n_rama ? { ...r, cantidad: numericValue } : r
-      )
-    );
+    setRamas((prev) => {
+      const clone = [...prev];
+      clone[index].cantidad = numericValue;
+      return clone;
+    });
   };
 
-  // ============================================================================
-  // VALIDACIÓN
-  // ============================================================================
-
-  const validateForm = (): boolean => {
-    if (!selectedToma) {
-      Alert.alert("Atención", "Selecciona primero una toma.");
-      return false;
-    }
-    if (!zonaSeleccionada) {
-      Alert.alert("Atención", "Selecciona una zona.");
-      return false;
-    }
-    if (!fila.trim()) {
-      Alert.alert("Atención", "Ingresa la fila.");
-      return false;
-    }
-    if (!orientacionSeleccionada) {
-      Alert.alert("Atención", "Selecciona una orientación.");
-      return false;
-    }
-    if (!planta.trim()) {
-      Alert.alert("Atención", "Ingresa el número de planta.");
-      return false;
-    }
+  /* ============================================================
+     VALIDACIÓN
+  ============================================================ */
+  const validateForm = () => {
+    if (!selectedToma) return false;
+    if (!zonaSeleccionada) return false;
+    if (!fila.trim()) return false;
+    if (!orientacionSeleccionada) return false;
+    if (!planta.trim()) return false;
 
     const ramasValidas = ramas.filter(
-      (r) => r.tipo_estado && r.cantidad && Number(r.cantidad) > 0
+      (r) =>
+        r.n_rama &&
+        r.tipo_estado &&
+        r.cantidad &&
+        Number(r.cantidad) > 0
     );
 
-    if (ramasValidas.length === 0) {
-      Alert.alert("Atención", "Registra al menos una rama.");
-      return false;
-    }
-
-    return true;
+    return ramasValidas.length > 0;
   };
 
-  // ============================================================================
-  // GUARDADO (SIN FOTOS NI CLIMA)
-  // ============================================================================
-
+  /* ============================================================
+     GUARDAR (ONLINE / OFFLINE)
+  ============================================================ */
   const handleGuardar = async () => {
     if (!validateForm() || !selectedToma) return;
 
     try {
       setIsSaving(true);
- // Verificar conexión
-  const net = await NetInfo.fetch();
-  const isOnline = net.isConnected && net.isInternetReachable;
+      const net = await NetInfo.fetch();
+      const isOnline = net.isConnected && net.isInternetReachable;
       const plantaNum = Number(planta);
-// OBTENER CLIMA SI HAY INTERNET
-let clima = null;
 
-if (isOnline && latitud && longitud) {
-  clima = await getWeather(latitud, longitud);
-}
-// Si NO hay internet → guardar en modo offline
-if (!isOnline) {
-  await addToOfflineQueue({
-    tipo: "toma_fenologica",
-    datos: {
-      selectedToma,
-      zonaSeleccionada,
-      fila,
-      orientacionSeleccionada,
-      plantaNum,
-      ramas,
-      foto1,
-      foto2,
-    },
-    timestamp: Date.now(),
-  });
+      /* ----------------- OFFLINE ----------------- */
+      if (!isOnline) {
+        await addToOfflineQueue({
+          tipo: "toma_fenologica",
+          datos: {
+            selectedToma,
+            zonaSeleccionada,
+            fila,
+            orientacionSeleccionada,
+            plantaNum,
+            ramas,
+            fotos: { foto1, foto2 },
+          },
+          timestamp: Date.now(),
+        });
 
-  Alert.alert(
-    "Sin conexión",
-    "El registro se guardó offline y se sincronizará automáticamente."
-  );
-  setIsSaving(false);
-  return;
-}
-// SUBIR FOTOS ANTES DE INSERTAR EN SUPABASE
-  let fotoUrl1: string | null = null;
-  let fotoUrl2: string | null = null;
-// 🔥 LOG TEMPORAL para saber si estás autenticado
-console.log("Sesion actual:", await supabase.auth.getSession());
-  if (foto1) {
-    fotoUrl1 = await subirFotoSupabase(selectedToma.id_toma, plantaNum, foto1);
-  }
+        Alert.alert(
+          "Sin conexión",
+          "El registro se guardó offline y se sincronizará automáticamente."
+        );
+        setIsSaving(false);
+        return;
+      }
 
-  if (foto2) {
-    fotoUrl2 = await subirFotoSupabase(selectedToma.id_toma, plantaNum, foto2);
-  }
- const filasInsert = ramas
-  .filter((r) => r.tipo_estado && r.cantidad && Number(r.cantidad) > 0)
-  .map((r) => ({
-    
-    id_toma: selectedToma.id_toma,
-    n_de_toma: selectedToma.n_de_toma,        // ✔️ NUEVO
-    variedad: selectedToma.variedad,          // ✔️ NUEVO
-    codigo_lote: selectedToma.codigo_lote,
-    nombre_lote: selectedToma.nombre_lote,
-    muestra_sugerida: selectedToma.muestra_sugerida,
+      /* ----------------- ONLINE ----------------- */
+      let lat: number | null = null;
+      let lon: number | null = null;
 
-    planta: plantaNum,
-    fila: fila.trim(),
-    n_rama: r.n_rama,
-    tipo_estado: r.tipo_estado,
-    es_estado: r.es_estado,
-    cantidad: Number(r.cantidad),
+      try {
+        const gps = await getCurrentPosition();
+        lat = gps.lat;
+        lon = gps.lon;
+      } catch {}
 
-    latitud,
-    longitud,
+      let fotoUrl1: string | null = null;
+      let fotoUrl2: string | null = null;
 
- temperatura_actual_c: clima?.temperatura_actual_c ?? null,
-humedad_relativa_pct: clima?.humedad_relativa_pct ?? null,
-presion_atmosferica_hpa: clima?.presion_atmosferica_hpa ?? null,
-sensacion_termica_c: clima?.sensacion_termica_c ?? null,
-nubosidad_pct: clima?.nubosidad_pct ?? null,
-velocidad_del_viento_mps: clima?.velocidad_del_viento_mps ?? null,
-direccion_del_viento: clima?.direccion_del_viento ?? null,
-radiacion_solar_uv: clima?.radiacion_solar_uv ?? null,
-fecha_y_hora: clima?.fecha_y_hora ?? new Date().toISOString(),
-fuente_de_datos: clima?.fuente_de_datos ?? "Sin Internet",
- foto1: fotoUrl1,
-foto2: fotoUrl2,
-    inspector,
-    zona: zonaSeleccionada,
-    orientacion: orientacionSeleccionada,
-  }));
+      if (foto1)
+        fotoUrl1 = await subirFotoSupabase(
+          selectedToma.id_toma,
+          plantaNum,
+          foto1
+        );
+
+      if (foto2)
+        fotoUrl2 = await subirFotoSupabase(
+          selectedToma.id_toma,
+          plantaNum,
+          foto2
+        );
+
+      const filasInsert = ramas
+        .filter(
+          (r) =>
+            r.n_rama &&
+            r.tipo_estado &&
+            r.cantidad &&
+            Number(r.cantidad) > 0
+        )
+        .map((r) => ({
+          id_toma: selectedToma.id_toma,
+          n_de_toma: selectedToma.n_de_toma,
+          variedad: selectedToma.variedad,
+          codigo_lote: selectedToma.codigo_lote,
+          nombre_lote: selectedToma.nombre_lote,
+          muestra_sugerida: selectedToma.muestra_sugerida,
+
+          planta: plantaNum,
+          fila: fila.trim(),
+
+          n_rama: Number(r.n_rama),
+          tipo_estado: r.tipo_estado,
+          es_estado: r.es_estado,
+          cantidad: Number(r.cantidad),
+
+          latitud: lat,
+          longitud: lon,
+
+          temperatura_actual_c: null,
+          humedad_relativa_pct: null,
+          presion_atmosferica_hpa: null,
+          sensacion_termica_c: null,
+          nubosidad_pct: null,
+          velocidad_del_viento_mps: null,
+          direccion_del_viento: null,
+          radiacion_solar_uv: null,
+          fecha_y_hora: new Date().toISOString(),
+          fuente_de_datos: "Sin datos",
+
+          fotos: {
+            foto1: fotoUrl1,
+            foto2: fotoUrl2,
+          },
+
+          inspector,
+          zona: zonaSeleccionada,
+          orientacion: orientacionSeleccionada,
+        }));
 
       const { error } = await supabase
         .from("tomas_fenologicas")
@@ -423,29 +469,23 @@ foto2: fotoUrl2,
       Alert.alert("Éxito", "Registros guardados correctamente.");
 
       setPlanta("");
-      setRamas(
-        Array.from({ length: MAX_RAMAS }, (_, idx) => ({
-          n_rama: idx + 1,
-        }))
-      );
+      setRamas(Array.from({ length: MAX_RAMAS }, () => ({ n_rama: "" })));
       setObservaciones("");
-    } catch (error: any) {
-      console.error(error);
+    } catch (e) {
       Alert.alert("Error", "No se pudieron guardar los registros.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ============================================================================
-  // UI PRINCIPAL
-  // ============================================================================
-
+  /* ============================================================
+     RENDER
+  ============================================================ */
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>Datos de campo - Insertar registro</Text>
+      <Text style={styles.headerTitle}>Datos de campo - Insertar toma fenológica</Text>
 
-      {/* Búsqueda */}
+      {/* BÚSQUEDA */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Seleccionar toma</Text>
 
@@ -501,7 +541,7 @@ foto2: fotoUrl2,
           <TouchableOpacity
             style={styles.searchButton}
             onPress={handleBuscarTomas}
-            disabled={isSearching}
+            disabled={isSearching || isLoadingCatalogos}
           >
             {isSearching ? (
               <ActivityIndicator color="#fff" />
@@ -510,7 +550,7 @@ foto2: fotoUrl2,
             )}
           </TouchableOpacity>
         </View>
-        {/* Resultados */}
+
         {tomasResults.length > 0 && !selectedToma && (
           <FlatList
             data={tomasResults}
@@ -533,7 +573,6 @@ foto2: fotoUrl2,
           />
         )}
 
-        {/* Toma seleccionada */}
         {selectedToma && (
           <View style={styles.selectedTomaContainer}>
             <Text style={styles.selectedTomaTitle}>
@@ -552,7 +591,7 @@ foto2: fotoUrl2,
         )}
       </View>
 
-      {/* FORMULARIO PRINCIPAL */}
+      {/* FORMULARIO */}
       {selectedToma && (
         <ScrollView style={styles.scrollArea}>
           <View style={styles.card}>
@@ -569,7 +608,6 @@ foto2: fotoUrl2,
             <TouchableOpacity
               style={styles.dropdown}
               onPress={() => setZonaModalVisible(true)}
-              disabled={isLoadingCatalogos}
             >
               <Text style={styles.dropdownText}>
                 {zonaSeleccionada || "Selecciona una zona"}
@@ -590,7 +628,6 @@ foto2: fotoUrl2,
             <TouchableOpacity
               style={styles.dropdown}
               onPress={() => setOrientacionModalVisible(true)}
-              disabled={isLoadingCatalogos}
             >
               <Text style={styles.dropdownText}>
                 {orientacionSeleccionada || "Selecciona una orientación"}
@@ -610,7 +647,7 @@ foto2: fotoUrl2,
             </TouchableOpacity>
           </View>
 
-          {/* PLANTA / RAMAS */}
+          {/* PLANTA Y FOTOS */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Registro por planta</Text>
 
@@ -623,68 +660,78 @@ foto2: fotoUrl2,
               value={planta}
               onChangeText={(v) => setPlanta(v.replace(/[^0-9]/g, ""))}
             />
-<Text style={[styles.sectionTitle, { marginTop: 16 }]}>
-  Fotos de la planta (máx 2)
-</Text>
 
-<View style={{ flexDirection: "row", marginTop: 8 }}>
-  <TouchableOpacity
-    style={[styles.saveButton, { flex: 1, marginRight: 6 }]}
-    onPress={async () => {
-      const uri = await tomarFoto();
-      if (uri) setFoto1(uri);
-    }}
-  >
-    <Text style={styles.saveButtonText}>
-      {foto1 ? "📸 Foto 1 lista" : "Tomar foto 1"}
-    </Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity
-    style={[styles.saveButton, { flex: 1, marginLeft: 6 }]}
-    onPress={async () => {
-      const uri = await tomarFoto();
-      if (uri) setFoto2(uri);
-    }}
-  >
-    <Text style={styles.saveButtonText}>
-      {foto2 ? "📸 Foto 2 lista" : "Tomar foto 2"}
-    </Text>
-  </TouchableOpacity>
-</View>
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>
-              Ramas (máximo 4)
+              Fotos de la planta (máx 2)
             </Text>
 
-            {ramas.map((rama) => (
-              <View key={rama.n_rama} style={styles.ramaRow}>
-                <Text style={styles.ramaLabel}>Rama {rama.n_rama}</Text>
+            <View style={{ flexDirection: "row", marginTop: 8 }}>
+              <TouchableOpacity
+                style={[styles.saveButton, { flex: 1, marginRight: 6 }]}
+                onPress={async () => {
+                  const uri = await tomarFoto();
+                  if (uri) setFoto1(uri);
+                }}
+              >
+                <Text style={styles.saveButtonText}>
+                  {foto1 ? "📸 Foto 1 lista" : "Tomar foto 1"}
+                </Text>
+              </TouchableOpacity>
 
-                {/* 🔥 DROPDOWN CORREGIDO USANDO LOS 30+ ESTADOS */}
-<TouchableOpacity
-  style={styles.dropdownSmall}
-  onPress={() => {
-    setEstadoModalRama(rama.n_rama);
-  }}
->
+              <TouchableOpacity
+                style={[styles.saveButton, { flex: 1, marginLeft: 6 }]}
+                onPress={async () => {
+                  const uri = await tomarFoto();
+                  if (uri) setFoto2(uri);
+                }}
+              >
+                <Text style={styles.saveButtonText}>
+                  {foto2 ? "📸 Foto 2 lista" : "Tomar foto 2"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.sectionTitle, { marginTop: 16 }]}>
+              Ramas (máximo 16)
+            </Text>
+
+            {ramas.map((rama, index) => (
+              <View key={index} style={styles.ramaRow}>
+                {/* NUMERO DE RAMA */}
+                <TextInput
+                  style={[styles.inputSmall, { width: 60, marginRight: 6 }]}
+                  placeholder="Rama"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                  value={rama.n_rama}
+                  onChangeText={(v) => handleChangeNumeroRama(index, v)}
+                />
+
+                {/* TIPO DE ESTADO */}
+                <TouchableOpacity
+                  style={styles.dropdownSmall}
+                  onPress={() => setEstadoModalRama(index)}
+                >
                   <Text style={styles.dropdownTextSmall}>
-                    {rama.es_estado || "Tipo estado"}
+                    {rama.tipo_estado
+                      ? `${rama.tipo_estado} - ${rama.es_estado}`
+                      : "Tipo estado"}
                   </Text>
                 </TouchableOpacity>
 
+                {/* CANTIDAD */}
                 <TextInput
                   style={styles.inputSmall}
                   placeholder="Cant."
                   placeholderTextColor="#999"
                   keyboardType="numeric"
                   value={rama.cantidad || ""}
-                  onChangeText={(v) => handleChangeCantidad(rama.n_rama, v)}
+                  onChangeText={(v) => handleChangeCantidad(index, v)}
                 />
               </View>
             ))}
           </View>
 
-          {/* GUARDAR */}
           <View style={styles.card}>
             <TouchableOpacity
               style={styles.saveButton}
@@ -725,69 +772,129 @@ foto2: fotoUrl2,
           </View>
         </View>
       </Modal>
-{estadoModalRama !== null && (
-  <Modal visible transparent animationType="fade">
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalContent}>
-        <Text style={styles.modalTitle}>Seleccionar estado</Text>
 
-        <FlatList
-          data={tiposEstado}
-          keyExtractor={(item) => item.codigo_estado}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.modalOption}
-              onPress={() => {
-                handleChangeTipoEstado(estadoModalRama, item.codigo_estado);
-                setEstadoModalRama(null);
-              }}
-            >
-              <Text style={styles.modalOptionText}>{item.nombre_estado}</Text>
-            </TouchableOpacity>
-          )}
-        />
 
-        <TouchableOpacity
-          style={styles.modalCloseButton}
-          onPress={() => setEstadoModalRama(null)}
-        >
-          <Text style={styles.modalCloseButtonText}>Cerrar</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </Modal>
-)}
-      {/* MODAL ZONA */}
-      {renderDropdownModal(
-        zonaModalVisible,
-        () => setZonaModalVisible(false),
-        "Selecciona una zona",
-        zonas.map((z) => ({
-          label: z.nombre_zona,
-          value: z.nombre_zona,
-        })),
-        setZonaSeleccionada
+      {/* MODAL TIPOS DE ESTADO */}
+      
+      {estadoModalRama !== null && (
+        <Modal visible transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Seleccionar estado</Text>
+
+              <FlatList
+  data={tiposEstado.filter(
+    (t) =>
+      normalizeKey(t.cultivo) ===
+      normalizeKey(selectedToma?.variedad ?? "")
+  )}
+  keyExtractor={(item) => item.codigo_estado}
+  renderItem={({ item }) => (
+    <TouchableOpacity
+      style={styles.modalOption}
+      onPress={() => {
+        handleChangeTipoEstado(estadoModalRama, item.codigo_estado);
+        setEstadoModalRama(null);
+      }}
+    >
+      <Text style={styles.modalOptionText}>
+        {item.codigo_estado} - {item.nombre_estado}
+      </Text>
+    </TouchableOpacity>
+  )}
+/>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setEstadoModalRama(null)}
+              >
+                <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       )}
 
-      {/* MODAL ORIENTACIÓN */}
-      {renderDropdownModal(
-        orientacionModalVisible,
-        () => setOrientacionModalVisible(false),
-        "Selecciona una orientación",
-        orientaciones.map((o) => ({
-          label: o.nombre_orientacion,
-          value: o.nombre_orientacion,
-        })),
-        setOrientacionSeleccionada
+      {/* MODAL ZONAS */}
+      {zonaModalVisible && (
+        <Modal visible transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Selecciona una zona</Text>
+
+              <FlatList
+                data={zonas.map((z) => ({
+                  label: z.nombre_zona,
+                  value: z.nombre_zona,
+                }))}
+                keyExtractor={(item) => item.value}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalOption}
+                    onPress={() => {
+                      setZonaSeleccionada(item.value);
+                      setZonaModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalOptionText}>{item.label}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setZonaModalVisible(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* MODAL ORIENTACIONES */}
+      {orientacionModalVisible && (
+        <Modal visible transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Selecciona una orientación</Text>
+
+              <FlatList
+                data={orientaciones.map((o) => ({
+                  label: o.nombre_orientacion,
+                  value: o.nombre_orientacion,
+                }))}
+                keyExtractor={(item) => item.value}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalOption}
+                    onPress={() => {
+                      setOrientacionSeleccionada(item.value);
+                      setOrientacionModalVisible(false);
+                    }}
+                  >
+                    <Text style={styles.modalOptionText}>{item.label}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setOrientacionModalVisible(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       )}
     </View>
   );
 };
 
-// ============================================================================
-// ESTILOS
-// ============================================================================
-
+/* ============================================================
+   ESTILOS
+============================================================ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -941,7 +1048,6 @@ const styles = StyleSheet.create({
     borderColor: "#4caf50",
     paddingVertical: 8,
     paddingHorizontal: 10,
-    marginTop: 2,
   },
   observacionesButtonText: {
     fontSize: 13,
@@ -952,11 +1058,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 6,
-  },
-  ramaLabel: {
-    fontSize: 12,
-    color: "#234d20",
-    width: 60,
   },
   dropdownSmall: {
     flex: 1,

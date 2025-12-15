@@ -5,7 +5,12 @@ import DatosCampoMenuScreen from "../screens/DatosCampo/DatosCampoMenuScreen";
 import InsertarRegistroTomaScreen from "../screens/DatosCampo/InsertarRegistroTomaScreen";
 import VerEditarRegistrosScreen from "../screens/DatosCampo/VerEditarRegistrosScreen";
 import GaleriaTomaScreen from "../screens/DatosCampo/GaleriaTomaScreen";
+import InsertarConteoFrutosCaidosScreen from "../screens/DatosCampo/InsertarConteoFrutosCaidosScreen";
+// ⭐ NUEVO: Calibración de frutos
+import InsertarCalibracionFrutosScreen from "../screens/DatosCampo/InsertarCalibracionFrutosScreen";
 
+// ⭐ (Pendiente): Conteo de frutos caídos
+// import InsertarConteoFrutosCaidosScreen from "../screens/DatosCampo/InsertarConteoFrutosCaidosScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -25,10 +30,23 @@ const DatosCampoStack = () => {
       />
 
       <Stack.Screen
-        name="InsertarRegistroToma"
+        name="InsertarRegistroTomaScreen"
         component={InsertarRegistroTomaScreen}
         options={{ title: "Insertar registro" }}
       />
+
+      {/* ⭐ NUEVO: INSERTAR CALIBRACIÓN DE FRUTOS */}
+      <Stack.Screen
+        name="InsertarCalibracionFrutosScreen"
+        component={InsertarCalibracionFrutosScreen}
+        options={{ title: "Calibración de Frutos" }}
+      />
+
+     <Stack.Screen
+  name="InsertarConteoFrutosCaidosScreen"
+  component={InsertarConteoFrutosCaidosScreen}
+  options={{ title: "Conteo de Frutos Caídos" }}
+/>
 
       <Stack.Screen
         name="VerEditarRegistros"

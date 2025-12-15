@@ -17,18 +17,15 @@ const GestionTomasMenu: React.FC = () => {
         <Text style={styles.buttonText}>1. Crear / aprobar toma</Text>
       </TouchableOpacity>
 
-      {/* 2. PLANIFICACIÓN DE TOMAS */}
+      {/* 2. PLAN Y CUMPLIMIENTO DE TOMAS (NUEVO NOMBRE) */}
       <TouchableOpacity
         style={styles.button}
         onPress={() => navigation.navigate("PlanificacionTomas")}
       >
-        <Text style={styles.buttonText}>2. Planificación de tomas</Text>
+        <Text style={styles.buttonText}>2. Plan y cumplimiento de tomas</Text>
       </TouchableOpacity>
 
-      {/* 3. CUMPLIMIENTO DEL PLAN (AÚN SIN CODIGO) */}
-      <TouchableOpacity style={styles.button}>
-        <Text style={styles.buttonText}>3. Cumplimiento del plan</Text>
-      </TouchableOpacity>
+      {/* ❌ Botón 3 eliminado */}
     </ScrollView>
   );
 };

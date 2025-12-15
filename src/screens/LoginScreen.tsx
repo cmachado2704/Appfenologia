@@ -1,146 +1,183 @@
-import { loginInspector } from "../services/authService";
-import React, { useState } from "react";
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  ImageBackground,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
-  Alert
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
-// 🔥 IMPORTANTE: Definir props correctamente
-type Props = {
-  onLoginSuccess: () => void;
-};
+import { supabase } from "../services/supabaseClient";
+import NetInfo from "@react-native-community/netinfo";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { updateCatalogCache } from "../utils/catalogCache";
 
-const LoginScreen: React.FC<Props> = ({ onLoginSuccess }) => {
+type Props = { onLoginSuccess: () => void };
 
-  const [usuario, setUsuario] = useState("");
+const LoginScreen = ({ onLoginSuccess }: Props) => {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // AUTOLOGIN
+  useEffect(() => {
+    const checkSession = async () => {
+      const saved = await AsyncStorage.getItem("session");
+      if (saved) onLoginSuccess();
+    };
+    checkSession();
+  }, []);
+
+  const handleLogin = async () => {
+    if (!email || !password)
+      return Alert.alert("Error", "Ingresa correo y contraseña.");
+
+    setLoading(true);
+
+    const net = await NetInfo.fetch();
+    const isOnline = net.isConnected && net.isInternetReachable;
+
+    // LOGIN OFFLINE
+    if (!isOnline) {
+      const saved = await AsyncStorage.getItem("session");
+      setLoading(false);
+      if (saved) return onLoginSuccess();
+
+      return Alert.alert(
+        "Sin conexión",
+        "Necesitas internet para iniciar sesión por primera vez."
+      );
+    }
+
+    // LOGIN ONLINE
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (error) {
+      setLoading(false);
+      return Alert.alert("Error", error.message);
+    }
+
+    await AsyncStorage.setItem("session", JSON.stringify(data.session));
+
+    try {
+      await updateCatalogCache();
+    } catch {}
+
+    setLoading(false);
+    onLoginSuccess();
+  };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#4B752A" }}>
-      <ScrollView 
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.innerBox}>
-          
-          {/* Usuario */}
-          <Text style={styles.label}>USUARIO</Text>
-          <TextInput
-            style={styles.input}
-            value={usuario}
-            onChangeText={setUsuario}
-            placeholder="Escribe tu usuario"
-            placeholderTextColor="#d9e6ff"
-          />
+    <ImageBackground
+      source={require("../assets/bg.jpg")} // <-- SOLO UNA IMAGEN DE FONDO
+      style={styles.bg}
+      resizeMode="cover"
+    >
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.inner}
+        >
+          {/* FORMULARIO */}
+          <View style={styles.formContainer}>
+            <TextInput
+              placeholder="Correo"
+              placeholderTextColor="#ccc"
+              style={styles.input}
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
 
-          {/* Contraseña */}
-          <Text style={styles.label}>CONTRASEÑA</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Escribe tu contraseña"
-            placeholderTextColor="#d9e6ff"
-            secureTextEntry
-          />
+            <TextInput
+              placeholder="Contraseña"
+              placeholderTextColor="#ccc"
+              secureTextEntry
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+            />
 
-          {/* Botón ingresar */}
-          <TouchableOpacity
-            style={styles.btnIngresar}
-            onPress={async () => {
-              if (!usuario || !password) {
-                Alert.alert("Completa usuario y contraseña");
-                return;
-              }
-
-              const resp = await loginInspector(usuario, password);
-
-              if (!resp.ok) {
-                console.log("LOGIN_ERROR:", resp);
-                Alert.alert("Hubo un error — revisa la consola");
-                return;
-              }
-
-              // ⭐ LOGIN EXITOSO
-              onLoginSuccess();
-
-              // ACTIVAR NAVEGACIÓN
-              onLoginSuccess();
-            }}
-          >
-            <Text style={styles.btnIngresarText}>INGRESAR</Text>
-          </TouchableOpacity>
-
-          {/* Pie de página */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>App AgroCheck</Text>
-            <Text style={styles.footerText}>V.1.0.0</Text>
-            <Text style={styles.footerText}>Propiedad de BPI Consultores</Text>
-            <Text style={styles.footerText}>Versión en desarrollo</Text>
+            <TouchableOpacity
+              style={styles.btn}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.btnText}>Ingresar</Text>
+              )}
+            </TouchableOpacity>
           </View>
 
-        </View>
+          {/* FOOTER / DISCLAIMER */}
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Propiedad de BPI Consultores</Text>
+            <Text style={styles.footerText}>Versión 0.0.0.4</Text>
+            <Text style={styles.footerText}>App en desarrollo</Text>
+          </View>
+        </KeyboardAvoidingView>
       </ScrollView>
-    </SafeAreaView>
+    </ImageBackground>
   );
 };
 
+export default LoginScreen;
+
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
+  bg: {
+    flex: 1,
+  },
+  inner: {
+    flex: 1,
     justifyContent: "center",
-    paddingVertical: 40,
     paddingHorizontal: 25,
-    backgroundColor: "#4B752A"
   },
-  innerBox: {
-    width: "100%",
-  },
-  label: {
-    color: "white",
-    fontSize: 16,
-    marginBottom: 5,
-    marginTop: 15,
+  formContainer: {
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 12,
+    padding: 20,
   },
   input: {
-    backgroundColor: "#3266C4",
+    backgroundColor: "rgba(255,255,255,0.25)",
+    color: "#fff",
+    borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 15,
-    borderRadius: 6,
-    color: "white",
+    marginBottom: 15,
     fontSize: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.4)",
   },
-  btnIngresar: {
-    backgroundColor: "#3266C4",
+  btn: {
+    backgroundColor: "#1e7f38",
     paddingVertical: 15,
-    borderRadius: 8,
-    marginTop: 35,
+    borderRadius: 10,
+    marginTop: 10,
     alignItems: "center",
   },
-  btnIngresarText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
+  btnText: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "700",
   },
   footer: {
-    marginTop: 50,
-    borderWidth: 1,
-    borderColor: "white",
-    padding: 15,
+    marginTop: 40,
     alignItems: "center",
-    borderRadius: 8,
   },
   footerText: {
-    color: "white",
+    color: "#ffffff",
     fontSize: 14,
-    marginVertical: 2,
+    opacity: 0.9,
   },
 });
-
-export default LoginScreen;

@@ -1,6 +1,13 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+} from "react-native";
 import { useNavigation, NavigationProp } from "@react-navigation/native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type Props = {
   onLogout: () => void;
@@ -10,50 +17,58 @@ const InicioScreen: React.FC<Props> = ({ onLogout }) => {
   const navigation = useNavigation<NavigationProp<any>>();
 
   return (
-    <View style={styles.container}>
-      {/* ENCABEZADO */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>AgroCheck</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
-          <Text style={styles.logoutText}>Cerrar sesión</Text>
-        </TouchableOpacity>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+
+        {/* ENCABEZADO */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>AgroCheck</Text>
+          <TouchableOpacity style={styles.logoutButton} onPress={onLogout}>
+            <Text style={styles.logoutText}>Cerrar sesión</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* BOTONES PRINCIPALES */}
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <TouchableOpacity
+            style={styles.mainButton}
+            onPress={() => navigation.navigate("Procesos")}
+          >
+            <Text style={styles.mainButtonText}>Gestión de Tomas</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.mainButton}
+            onPress={() => navigation.navigate("DatosCampo")}
+          >
+            <Text style={styles.mainButtonText}>Datos de campo</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.mainButton}
+            onPress={() => navigation.navigate("ConsultasMantenedores")}
+          >
+            <Text style={styles.mainButtonText}>Consultas y mantenedores</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.mainButton}>
+            <Text style={styles.mainButtonText}>Capacitación</Text>
+          </TouchableOpacity>
+
+          {/* ESPACIO PARA QUE NO LO CUBRA LA BARRA DEL CELULAR */}
+          <View style={{ height: 40 }} />
+        </ScrollView>
+
       </View>
-
-      {/* BOTONES PRINCIPALES */}
-      <ScrollView contentContainerStyle={styles.scroll}>
-        
-        {/* Gestión de Tomas */}
-        <TouchableOpacity
-          style={styles.mainButton}
-          onPress={() => navigation.navigate("Procesos")}
-        >
-          <Text style={styles.mainButtonText}>Gestión de Tomas</Text>
-        </TouchableOpacity>
-
-        {/* Datos de campo */}
-        <TouchableOpacity
-          style={styles.mainButton}
-          onPress={() => navigation.navigate("DatosCampo")}
-        >
-          <Text style={styles.mainButtonText}>Datos de campo</Text>
-        </TouchableOpacity>
-
-        {/* Consultas y mantenedores */}
-        <TouchableOpacity style={styles.mainButton}>
-          <Text style={styles.mainButtonText}>Consultas y mantenedores</Text>
-        </TouchableOpacity>
-
-        {/* Capacitación */}
-        <TouchableOpacity style={styles.mainButton}>
-          <Text style={styles.mainButtonText}>Capacitación</Text>
-        </TouchableOpacity>
-
-      </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#2f5d2c", // evita ver fondo blanco detrás del notch
+  },
   container: {
     flex: 1,
     backgroundColor: "#2f5d2c",
@@ -68,7 +83,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "700",
   },
   logoutButton: {
@@ -85,6 +100,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     padding: 20,
+    paddingBottom: 90, // ← NECESARIO para evitar que lo tape la barra inferior
   },
   mainButton: {
     backgroundColor: "#4a7c59",

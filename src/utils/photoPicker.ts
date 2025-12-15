@@ -3,12 +3,14 @@ import {launchCamera} from "react-native-image-picker";
 export const tomarFoto = async (): Promise<string | null> => {
   return new Promise((resolve, reject) => {
     launchCamera(
-      {
-        mediaType: "photo",
-        cameraType: "back",
-        quality: 0.8,
-        saveToPhotos: false,
-      },
+  {
+    mediaType: "photo",
+    cameraType: "back",
+    quality: 0.4,
+    maxWidth: 1280,   // reduce resolución
+    maxHeight: 1280,
+    saveToPhotos: false,
+  },
       (response) => {
         if (response.didCancel) {
           resolve(null);

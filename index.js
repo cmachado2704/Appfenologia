@@ -4,7 +4,7 @@
 
 import 'react-native-url-polyfill/auto';
 import 'react-native-get-random-values';
-import 'react-native-quick-base64';
+
 
 import 'fast-text-encoding';
 import { AppRegistry } from 'react-native';
