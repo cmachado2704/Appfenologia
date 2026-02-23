@@ -381,7 +381,7 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
             ]}
             onPress={() => setSearchMode("numero")}
           >
-            <Text style={styles.toggleText}>Por N° de toma</Text>
+            <Text style={styles.toggleText}>Por N°de toma</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -531,7 +531,7 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
               <Text style={styles.regHeaderText}>Calibre</Text>
             </View>
 
-            {registros.slice(0, 5).map((r, idx) => (
+            {registros.slice(0, 20).map((r, idx) => (
               <View key={idx} style={styles.regRow}>
                 <TextInput
                   style={styles.regInput}
@@ -541,7 +541,7 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
                   }
                   keyboardType="numeric"
                 />
-
+ 
                 <TextInput
                   style={styles.regInput}
                   value={r.fila}
@@ -758,6 +758,8 @@ const styles = StyleSheet.create({
   toggleText: {
     color: "#fff",
     fontWeight: "600",
+    fontSize: 12,
+     alignItems: "center",
   },
 
   /* ===== BUSCADOR ===== */

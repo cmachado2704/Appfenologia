@@ -123,7 +123,7 @@ const LoginScreen = ({ onLoginSuccess }: Props) => {
           {/* FOOTER / DISCLAIMER */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Propiedad de BPI Consultores</Text>
-            <Text style={styles.footerText}>Versión 0.0.0.4</Text>
+            <Text style={styles.footerText}>Versión 0.1.0</Text>
             <Text style={styles.footerText}>App en desarrollo</Text>
           </View>
         </KeyboardAvoidingView>

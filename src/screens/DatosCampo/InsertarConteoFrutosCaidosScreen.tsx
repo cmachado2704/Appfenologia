@@ -244,26 +244,32 @@ const InsertarConteoFrutosCaidosScreen = ({ navigation }: any) => {
         setSubiendoFotos(false);
       }
     }
-
+const nombreLoteSeguro =
+  typeof selectedToma.nombre_lote === "string"
+    ? selectedToma.nombre_lote
+    : "";
     const payloads = regsValidos.map((r) => ({
-      cosecha: campania,
-      num_semana: getISOWeek(new Date(fechaEval)),
-      fecha_evaluacion: fechaEval,
-      sector,
-      lado,
-      fila: r.fila,
-      n_planta: Number(r.n_planta),
-      lote: selectedToma.codigo_lote,
-      variedad: selectedToma.variedad,
-      n_de_toma: selectedToma.n_de_toma,
-      n_frutos_caidos: Number(r.n_frutos_caidos),
-      calibre_minimo: r.calibre_min ? Number(r.calibre_min) : null,
-      calibre_maximo: r.calibre_max ? Number(r.calibre_max) : null,
-      fotos: fotosFinal,
-      inspector: "APP",
-      latitud: lat,
-      longitud: lon,
-    }));
+  cosecha: campania,
+  num_semana: getISOWeek(new Date(fechaEval)),
+  fecha_evaluacion: fechaEval,
+  sector,
+  lado,
+  fila: r.fila,
+  n_planta: Number(r.n_planta),
+
+  lote: selectedToma.codigo_lote,
+  nombre_lote: nombreLoteSeguro, // 🔒 BLINDADO
+
+  variedad: selectedToma.variedad,
+  n_de_toma: selectedToma.n_de_toma,
+  n_frutos_caidos: Number(r.n_frutos_caidos),
+  calibre_minimo: r.calibre_min ? Number(r.calibre_min) : null,
+  calibre_maximo: r.calibre_max ? Number(r.calibre_max) : null,
+  fotos: fotosFinal,
+  inspector: "Inspector prueba",
+  latitud: lat,
+  longitud: lon,
+}));
 
     if (!isOnline) {
       for (const p of payloads) {
@@ -425,7 +431,7 @@ const InsertarConteoFrutosCaidosScreen = ({ navigation }: any) => {
     <Text style={styles.regHeaderText}>Cal. Max</Text>
   </View>
 
-  {registros.slice(0, 5).map((r, idx) => (
+  {registros.slice(0, 20).map((r, idx) => (
     <View key={idx} style={styles.regRow}>
       <TextInput
         style={styles.regInput}

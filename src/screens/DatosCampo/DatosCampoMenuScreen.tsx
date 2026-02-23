@@ -131,6 +131,15 @@ useEffect(() => {
 >
   <Text style={styles.buttonText}>Conteo de Frutos Caídos</Text>
 </TouchableOpacity>
+<TouchableOpacity
+  style={styles.menuButton}
+  onPress={() => navigation.navigate("VerEditarRegistros")}
+>
+  <Text style={styles.menuButtonText}>
+    Ver / Editar registros
+  </Text>
+</TouchableOpacity>
+
 
       {/* Estado de conexión y catálogos */}
       <View style={styles.statusBox}>
@@ -215,4 +224,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+  menuButton: {
+  backgroundColor: "#2e7d32",
+  padding: 16,
+  borderRadius: 10,
+  marginBottom: 12,
+  alignItems: "center",
+},
+
+menuButtonText: {
+  color: "#fff",
+  fontSize: 16,
+  fontWeight: "700",
+},
+
 });
