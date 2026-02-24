@@ -18,6 +18,7 @@ import { supabase } from "../../services/supabaseClient";
 import { CatalogCache } from "../../utils/catalogCache";
 import { getCurrentPosition } from "../../utils/location";
 import { addToOfflineQueue } from "../../utils/offlineQueue";
+import { fetchClimaYUbicacion } from "../../services/climaService";
 
 /* ===== FOTOS (MISMO STACK QUE INSERTARREGISTROTOMASCREEN) ===== */
 import { tomarFoto } from "../../utils/photoPicker";
@@ -193,8 +194,23 @@ const InsertarConteoFrutosCaidosScreen = ({ navigation }: any) => {
     return n >= 1 && n <= 50;
   };
 
+  const handleCargarClima = async () => {
+    try {
+      setIsLoadingClima(true);
+      const climaPayload = await fetchClimaYUbicacion();
+      setClima(climaPayload);
+      Alert.alert("Clima", "Clima cargado");
+    } catch (e: any) {
+      Alert.alert("Clima", e?.message || "No se pudo cargar datos de clima.");
+    } finally {
+      setIsLoadingClima(false);
+    }
+  };
+
   /* ================= GUARDAR ================= */
   const [loading, setLoading] = useState(false);
+  const [isLoadingClima, setIsLoadingClima] = useState(false);
+  const [clima, setClima] = useState<any>(null);
 
   const handleGuardar = async () => {
     if (!selectedToma) return Alert.alert("Seleccione una toma");
@@ -217,13 +233,15 @@ const InsertarConteoFrutosCaidosScreen = ({ navigation }: any) => {
 
     setLoading(true);
 
-    let lat = null;
-    let lon = null;
-    try {
-      const gps = await getCurrentPosition();
-      lat = gps.lat;
-      lon = gps.lon;
-    } catch {}
+    let lat = clima?.latitud ?? null;
+    let lon = clima?.longitud ?? null;
+    if (lat == null || lon == null) {
+      try {
+        const gps = await getCurrentPosition();
+        lat = gps.lat;
+        lon = gps.lon;
+      } catch {}
+    }
 
     /* ===== FOTOS ===== */
     let fotosFinal: { foto1: string | null; foto2: string | null } = {
@@ -269,6 +287,17 @@ const nombreLoteSeguro =
   inspector: "Inspector prueba",
   latitud: lat,
   longitud: lon,
+  pais: clima?.pais ?? null,
+  departamento: clima?.departamento ?? null,
+  provincia: clima?.provincia ?? null,
+  distrito: clima?.distrito ?? null,
+  temperatura_actual_c: clima?.temperatura_actual_c ?? null,
+  humedad_relativa_pct: clima?.humedad_relativa_pct ?? null,
+  presion_atmosferica_hpa: clima?.presion_atmosferica_hpa ?? null,
+  nubosidad_pct: clima?.nubosidad_pct ?? null,
+  velocidad_del_viento_mps: clima?.velocidad_del_viento_mps ?? null,
+  direccion_del_viento: clima?.direccion_del_viento ?? null,
+  radiacion_solar_uv: clima?.radiacion_solar_uv ?? null,
 }));
 
     if (!isOnline) {
@@ -418,6 +447,27 @@ const nombreLoteSeguro =
                 {lado || "Seleccionar lado / variedad"}
               </Text>
             </TouchableOpacity>
+
+            <Text style={styles.label}>Clima y ubicación</Text>
+            <TouchableOpacity
+              style={[styles.searchButton, (!isOnline || isLoadingClima) && styles.buttonDisabled]}
+              onPress={handleCargarClima}
+              disabled={!isOnline || isLoadingClima}
+            >
+              {isLoadingClima ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.searchButtonText}>Cargando clima...</Text>
+                </View>
+              ) : (
+                <Text style={styles.searchButtonText}>Cargar datos de clima</Text>
+              )}
+            </TouchableOpacity>
+            {!!clima && (
+              <Text style={styles.climaHint}>
+                Clima listo: {clima.temperatura_actual_c ?? "-"}°C, UV {clima.radiacion_solar_uv ?? "-"}
+              </Text>
+            )}
           </View>
 
           <View style={styles.card}>
@@ -661,4 +711,12 @@ const styles = StyleSheet.create({
   },
   modalContent: { backgroundColor: "#fff", borderRadius: 10, width: "85%", maxHeight: "70%" },
   modalItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: "#eee", fontSize: 16 },
+  buttonDisabled: { opacity: 0.5 },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  climaHint: { marginTop: 8, color: "#234d20", fontSize: 12 },
 });

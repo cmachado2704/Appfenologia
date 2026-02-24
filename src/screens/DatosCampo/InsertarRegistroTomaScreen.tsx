@@ -20,6 +20,7 @@ import { addToOfflineQueue } from "../../utils/offlineQueue";
 import { getCurrentPosition } from "../../utils/location";
 import { CatalogCache } from "../../utils/catalogCache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { fetchClimaYUbicacion } from "../../services/climaService";
 
 const normalizeKey = (value?: string) =>
   value
@@ -112,6 +113,9 @@ const InsertarRegistroTomaScreen: React.FC = () => {
   );
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
+  const [isLoadingClima, setIsLoadingClima] = useState(false);
+  const [clima, setClima] = useState<any>(null);
 
   const inspector = "INSPECTOR_DEMO";
 
@@ -211,6 +215,27 @@ const InsertarRegistroTomaScreen: React.FC = () => {
   useEffect(() => {
     loadCatalogos();
   }, [loadCatalogos]);
+
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener((s) => {
+      setIsOnline(!!(s.isConnected && s.isInternetReachable));
+    });
+
+    return () => unsub();
+  }, []);
+
+  const handleCargarClima = async () => {
+    try {
+      setIsLoadingClima(true);
+      const climaPayload = await fetchClimaYUbicacion();
+      setClima(climaPayload);
+      Alert.alert("Clima", "Clima cargado");
+    } catch (e: any) {
+      Alert.alert("Clima", e?.message || "No se pudo cargar datos de clima.");
+    } finally {
+      setIsLoadingClima(false);
+    }
+  };
 
   /* ============================================================
      BÚSQUEDA DE TOMAS ( online + orden por n_de_toma )
@@ -386,14 +411,16 @@ const InsertarRegistroTomaScreen: React.FC = () => {
       }
 
       /* ----------------- ONLINE ----------------- */
-      let lat: number | null = null;
-      let lon: number | null = null;
+      let lat: number | null = clima?.latitud ?? null;
+      let lon: number | null = clima?.longitud ?? null;
 
-      try {
-        const gps = await getCurrentPosition();
-        lat = gps.lat;
-        lon = gps.lon;
-      } catch {}
+      if (lat == null || lon == null) {
+        try {
+          const gps = await getCurrentPosition();
+          lat = gps.lat;
+          lon = gps.lon;
+        } catch {}
+      }
 
       let fotoUrl1: string | null = null;
       let fotoUrl2: string | null = null;
@@ -439,14 +466,19 @@ const InsertarRegistroTomaScreen: React.FC = () => {
           latitud: lat,
           longitud: lon,
 
-          temperatura_actual_c: null,
-          humedad_relativa_pct: null,
-          presion_atmosferica_hpa: null,
+          pais: clima?.pais ?? null,
+          departamento: clima?.departamento ?? null,
+          provincia: clima?.provincia ?? null,
+          distrito: clima?.distrito ?? null,
+          temperatura_actual_c: clima?.temperatura_actual_c ?? null,
+          humedad_relativa_pct: clima?.humedad_relativa_pct ?? null,
+          presion_atmosferica_hpa: clima?.presion_atmosferica_hpa ?? null,
           sensacion_termica_c: null,
-          nubosidad_pct: null,
-          velocidad_del_viento_mps: null,
-          direccion_del_viento: null,
-          radiacion_solar_uv: null,
+          nubosidad_pct: clima?.nubosidad_pct ?? null,
+          velocidad_del_viento_mps: clima?.velocidad_del_viento_mps ?? null,
+          direccion_del_viento: clima?.direccion_del_viento ?? null,
+          radiacion_solar_uv: clima?.radiacion_solar_uv ?? null,
+          punto_de_rocio_c: null,
           fecha_y_hora: new Date().toISOString(),
           fuente_de_datos: "Sin datos",
 
@@ -623,6 +655,27 @@ const InsertarRegistroTomaScreen: React.FC = () => {
               value={fila}
               onChangeText={(v) => setFila(v.replace(/[^0-9]/g, ""))}
             />
+
+            <Text style={styles.label}>Clima y ubicación</Text>
+            <TouchableOpacity
+              style={[styles.searchButton, !isOnline && styles.disabledButton]}
+              onPress={handleCargarClima}
+              disabled={!isOnline || isLoadingClima}
+            >
+              {isLoadingClima ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.searchButtonText}>Cargando clima...</Text>
+                </View>
+              ) : (
+                <Text style={styles.searchButtonText}>Cargar datos de clima</Text>
+              )}
+            </TouchableOpacity>
+            {!!clima && (
+              <Text style={styles.helperText}>
+                Clima listo: {clima.temperatura_actual_c ?? "-"}°C, HR {clima.humedad_relativa_pct ?? "-"}%
+              </Text>
+            )}
 
             <Text style={styles.label}>Orientación</Text>
             <TouchableOpacity
@@ -1144,6 +1197,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     minHeight: 120,
     textAlignVertical: "top",
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  helperText: {
+    marginTop: 6,
+    color: "#234d20",
+    fontSize: 12,
   },
 });
 
