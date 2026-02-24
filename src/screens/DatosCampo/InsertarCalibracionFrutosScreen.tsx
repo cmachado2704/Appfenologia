@@ -18,6 +18,7 @@ import { supabase } from "../../services/supabaseClient";
 import { CatalogCache } from "../../utils/catalogCache";
 import { getCurrentPosition } from "../../utils/location";
 import { addToOfflineQueue } from "../../utils/offlineQueue";
+import { fetchClimaYUbicacion } from "../../services/climaService";
 
 /* ===== FOTOS (MISMO STACK YA VALIDADO) ===== */
 import { tomarFoto } from "../../utils/photoPicker";
@@ -177,6 +178,8 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
   const [variedad, setVariedad] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [isLoadingClima, setIsLoadingClima] = useState(false);
+  const [clima, setClima] = useState<any>(null);
 
   const getISOWeek = (date: Date) => {
     const tmp = new Date(
@@ -252,6 +255,22 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
     }
   }, [selectedToma]);
 
+  const handleCargarClima = async () => {
+    try {
+      setIsLoadingClima(true);
+      const climaPayload = await fetchClimaYUbicacion();
+      setClima(climaPayload);
+      Alert.alert(
+        "Clima",
+        climaPayload.warning ? "Clima cargado (ubicación parcial)." : "Clima cargado"
+      );
+    } catch (e: any) {
+      Alert.alert("Clima", e?.message || "No se pudo cargar datos de clima.");
+    } finally {
+      setIsLoadingClima(false);
+    }
+  };
+
   /* ============================================================
      GUARDAR
   ============================================================ */
@@ -270,14 +289,16 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
     setLoading(true);
 
     try {
-      let lat = null;
-      let lon = null;
+      let lat = clima?.latitud ?? null;
+      let lon = clima?.longitud ?? null;
 
-      try {
-        const gps = await getCurrentPosition();
-        lat = gps.lat;
-        lon = gps.lon;
-      } catch {}
+      if (lat == null || lon == null) {
+        try {
+          const gps = await getCurrentPosition();
+          lat = gps.lat;
+          lon = gps.lon;
+        } catch {}
+      }
 
       // Subir fotos (solo online). Offline: se guardan URIs y luego syncOfflineQueue las sube.
       let fotoUrl1: string | null = foto1;
@@ -323,6 +344,17 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
         inspector: "APP",
         latitud: lat,
         longitud: lon,
+        pais: clima?.pais ?? null,
+        departamento: clima?.departamento ?? null,
+        provincia: clima?.provincia ?? null,
+        distrito: clima?.distrito ?? null,
+        temperatura_actual_c: clima?.temperatura_actual_c ?? null,
+        humedad_relativa_pct: clima?.humedad_relativa_pct ?? null,
+        presion_atmosferica_hpa: clima?.presion_atmosferica_hpa ?? null,
+        nubosidad_pct: clima?.nubosidad_pct ?? null,
+        velocidad_del_viento_mps: clima?.velocidad_del_viento_mps ?? null,
+        direccion_del_viento: clima?.direccion_del_viento ?? null,
+        radiacion_solar_uv: clima?.radiacion_solar_uv ?? null,
       };
 
       const inserts = validos.map((r) => ({
@@ -520,6 +552,27 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
                 {sector || "Seleccionar sector"}
               </Text>
             </TouchableOpacity>
+
+            <Text style={styles.label}>Clima y ubicación</Text>
+            <TouchableOpacity
+              style={[styles.searchButton, (!isOnline || isLoadingClima) && styles.buttonDisabled]}
+              onPress={handleCargarClima}
+              disabled={!isOnline || isLoadingClima}
+            >
+              {isLoadingClima ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={styles.searchButtonText}>Cargando clima...</Text>
+                </View>
+              ) : (
+                <Text style={styles.searchButtonText}>Cargar datos de clima</Text>
+              )}
+            </TouchableOpacity>
+            {!!clima && (
+              <Text style={styles.climaHint}>
+                Clima listo: {clima.temperatura_actual_c ?? "-"}°C, viento {clima.direccion_del_viento ?? "-"}
+              </Text>
+            )}
 
             {/* Registro de Calibración (GRID - igual a Conteo) */}
             <Text style={styles.sectionTitle}>Registro de Calibración</Text>
@@ -913,5 +966,19 @@ const styles = StyleSheet.create({
     color: "#000",
     marginRight: 4,
     textAlign: "center",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  climaHint: {
+    marginTop: 8,
+    color: "#234d20",
+    fontSize: 12,
   },
 });
