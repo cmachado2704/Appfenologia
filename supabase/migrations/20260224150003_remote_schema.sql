@@ -472,9 +472,6 @@ END;
 $function$
 ;
 
-create type "public"."geometry_dump" as ("path" integer[], "geom" public.geometry);
-
-create type "public"."valid_detail" as ("valid" boolean, "reason" character varying, "location" public.geometry);
 
 grant delete on table "public"."calibracion_frutos" to "anon";
 
