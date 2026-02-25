@@ -12,6 +12,7 @@ import { ReporteCluster } from "./types";
 type ReporteMapProps = {
   clusters: ReporteCluster[];
   selectedLoteCoords?: { latitud: number | null; longitud: number | null } | null;
+  lotes?: Array<{ nombre_lote: string; latitud: number | null; longitud: number | null }>;
 };
 
 const colorByProceso = {
@@ -42,15 +43,36 @@ const toPosition = (
   return clamped;
 };
 
-const ReporteMap: React.FC<ReporteMapProps> = ({ clusters, selectedLoteCoords }) => {
+const ReporteMap: React.FC<ReporteMapProps> = ({ clusters, selectedLoteCoords, lotes = [] }) => {
   const [selected, setSelected] = useState<ReporteCluster | null>(null);
 
+  const fallbackClusters = useMemo<ReporteCluster[]>(() => {
+    if (clusters.length > 0) return clusters;
+
+    return lotes
+      .filter((l) => l.latitud != null && l.longitud != null)
+      .map((l) => ({
+        lat: Number(l.latitud),
+        lng: Number(l.longitud),
+        total: 0,
+        registros: [
+          {
+            lat: Number(l.latitud),
+            lng: Number(l.longitud),
+            loteNombre: l.nombre_lote,
+            proceso: "fenologia",
+            fecha: null,
+          },
+        ],
+      }));
+  }, [clusters, lotes]);
+
   const bounds = useMemo(() => {
-    if (!clusters.length) {
+    if (!fallbackClusters.length) {
       return { minLat: 0, maxLat: 0, minLng: 0, maxLng: 0 };
     }
 
-    return clusters.reduce(
+    return fallbackClusters.reduce(
       (acc, c) => ({
         minLat: Math.min(acc.minLat, c.lat),
         maxLat: Math.max(acc.maxLat, c.lat),
@@ -58,13 +80,13 @@ const ReporteMap: React.FC<ReporteMapProps> = ({ clusters, selectedLoteCoords })
         maxLng: Math.max(acc.maxLng, c.lng),
       }),
       {
-        minLat: clusters[0].lat,
-        maxLat: clusters[0].lat,
-        minLng: clusters[0].lng,
-        maxLng: clusters[0].lng,
+        minLat: fallbackClusters[0].lat,
+        maxLat: fallbackClusters[0].lat,
+        minLng: fallbackClusters[0].lng,
+        maxLng: fallbackClusters[0].lng,
       }
     );
-  }, [clusters]);
+  }, [fallbackClusters]);
 
   const center = useMemo(() => {
     if (
@@ -74,16 +96,16 @@ const ReporteMap: React.FC<ReporteMapProps> = ({ clusters, selectedLoteCoords })
       return { lat: selectedLoteCoords.latitud, lng: selectedLoteCoords.longitud };
     }
 
-    if (!clusters.length) return null;
+    if (!fallbackClusters.length) return null;
 
-    const total = clusters.length;
-    const acc = clusters.reduce(
+    const total = fallbackClusters.length;
+    const acc = fallbackClusters.reduce(
       (sum, c) => ({ lat: sum.lat + c.lat, lng: sum.lng + c.lng }),
       { lat: 0, lng: 0 }
     );
 
     return { lat: acc.lat / total, lng: acc.lng / total };
-  }, [clusters, selectedLoteCoords]);
+  }, [fallbackClusters, selectedLoteCoords]);
 
   const summaryByMonth = useMemo(() => {
     if (!selected) return [] as Array<{ label: string; total: number }>;
@@ -105,7 +127,7 @@ const ReporteMap: React.FC<ReporteMapProps> = ({ clusters, selectedLoteCoords })
       </Text>
 
       <View style={styles.mapArea}>
-        {clusters.map((cluster, idx) => {
+        {fallbackClusters.map((cluster, idx) => {
           const firstProcess = cluster.registros[0]?.proceso || "fenologia";
           const top = toPosition(cluster.lat, bounds.minLat, bounds.maxLat, 50);
           const left = toPosition(cluster.lng, bounds.minLng, bounds.maxLng, 50);
@@ -124,7 +146,7 @@ const ReporteMap: React.FC<ReporteMapProps> = ({ clusters, selectedLoteCoords })
               ]}
               onPress={() => setSelected(cluster)}
             >
-              <Text style={styles.markerText}>{cluster.total}</Text>
+              <Text style={styles.markerText}>{cluster.total > 0 ? cluster.total : "•"}</Text>
             </TouchableOpacity>
           );
         })}

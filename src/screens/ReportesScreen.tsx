@@ -31,11 +31,15 @@ const ReportesScreen = () => {
 
       <View style={styles.mapContainer}>
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color="#1b1b1b" />
         ) : error ? (
           <Text style={styles.error}>{error}</Text>
         ) : (
-          <ReporteMap clusters={clusters} selectedLoteCoords={selectedLoteCoords} />
+          <ReporteMap
+            clusters={clusters}
+            selectedLoteCoords={selectedLoteCoords}
+            lotes={lotes}
+          />
         )}
       </View>
     </View>
@@ -49,7 +53,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   mapContainer: { flex: 1 },
-  error: { color: "#fff" },
+  error: { color: "#1b1b1b", backgroundColor: "#e8f5e9", padding: 8, borderRadius: 8 },
 });
 
 export default ReportesScreen;

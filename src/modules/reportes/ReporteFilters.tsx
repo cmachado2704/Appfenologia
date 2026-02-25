@@ -37,6 +37,8 @@ const ReporteFilters: React.FC<ReporteFiltersProps> = ({
       <Text style={styles.label}>Cultivo</Text>
       <View style={styles.pickerWrap}>
         <Picker
+          style={styles.picker}
+          dropdownIconColor="#234d20"
           selectedValue={filtros.cultivo ?? ""}
           onValueChange={(value) =>
             setFiltros((prev) => ({ ...prev, cultivo: value ? String(value) : null }))
@@ -52,6 +54,8 @@ const ReporteFilters: React.FC<ReporteFiltersProps> = ({
       <Text style={styles.label}>Lote</Text>
       <View style={styles.pickerWrap}>
         <Picker
+          style={styles.picker}
+          dropdownIconColor="#234d20"
           selectedValue={filtros.lote ?? ""}
           onValueChange={(value) =>
             setFiltros((prev) => ({ ...prev, lote: value ? String(value) : null }))
@@ -83,6 +87,7 @@ const styles = StyleSheet.create({
   tabTextActive: { color: "#fff", fontWeight: "700" },
   label: { color: "#234d20", fontWeight: "700", marginBottom: 4, marginTop: 4 },
   pickerWrap: { backgroundColor: "#eee", borderRadius: 8 },
+  picker: { color: "#1b1b1b" },
 });
 
 export default ReporteFilters;

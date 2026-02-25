@@ -3,10 +3,19 @@ import { supabase } from "../../services/supabaseClient";
 import { clusterPoints } from "./clusterUtils";
 import { ReporteCluster, ReporteFiltros, ReporteRegistro } from "./types";
 
-const procesoToTable = {
-  fenologia: "tomas_fenologicas",
-  calibracion: "calibracion_frutos",
-  conteo: "conteo_frutos_caidos",
+const procesoConfig = {
+  fenologia: {
+    table: "tomas_fenologicas",
+    fechaField: "fecha_y_hora",
+  },
+  calibracion: {
+    table: "calibracion_frutos",
+    fechaField: "fecha_evaluacion",
+  },
+  conteo: {
+    table: "conteo_frutos_caidos",
+    fechaField: "fecha_evaluacion",
+  },
 } as const;
 
 type LoteRow = {
@@ -47,10 +56,10 @@ export const useReporteData = (filtros: ReporteFiltros) => {
         setLoading(true);
         setError(null);
 
-        const table = procesoToTable[filtros.proceso];
+        const { table, fechaField } = procesoConfig[filtros.proceso];
         const { data, error: dbError } = await supabase
           .from(table)
-          .select("latitud,longitud,fecha,lote_id")
+          .select(`latitud,longitud,${fechaField},lote_id,nombre_lote`)
           .not("latitud", "is", null)
           .not("longitud", "is", null);
 
@@ -68,13 +77,17 @@ export const useReporteData = (filtros: ReporteFiltros) => {
         let normalized: ReporteRegistro[] = base
           .map((row) => {
             const lote = row.lote_id ? lotesById.get(String(row.lote_id)) : undefined;
-            const loteNombre = lote?.nombre_lote || (row.lote_id as string) || "Sin lote";
+            const loteNombre =
+              lote?.nombre_lote ||
+              (typeof row.nombre_lote === "string" ? row.nombre_lote : null) ||
+              (row.lote_id as string) ||
+              "Sin lote";
             return {
               lat: Number(row.latitud),
               lng: Number(row.longitud),
               loteNombre,
               proceso: filtros.proceso,
-              fecha: row.fecha ?? null,
+              fecha: row[fechaField] ?? null,
             };
           })
           .filter((row) => Number.isFinite(row.lat) && Number.isFinite(row.lng));
