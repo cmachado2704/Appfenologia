@@ -17,6 +17,7 @@ import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { supabase } from "../../services/supabaseClient";
 import { useRoute, useNavigation } from "@react-navigation/native";
+import { handlePostSaveReset } from "../../utils/postSaveReset";
 
 type Lote = {
   id_lote: string;
@@ -245,7 +246,38 @@ const CrearTomaScreen: React.FC = () => {
       if (error) return Alert.alert("Error", JSON.stringify(error));
 
       Alert.alert("Éxito", "Toma actualizada correctamente.");
-      navigation.goBack();
+      handlePostSaveReset(
+        {
+          selectedLoteId,
+          tipoToma,
+          tomasFenologicas,
+          tomasConteo,
+          tomasCalibracion,
+          fechaInicio,
+          fechaFin,
+        },
+        (next) => {
+          setSelectedLoteId(next.selectedLoteId);
+          setTipoToma(next.tipoToma);
+          setTomasFenologicas(next.tomasFenologicas);
+          setTomasConteo(next.tomasConteo);
+          setTomasCalibracion(next.tomasCalibracion);
+          setFechaInicio(next.fechaInicio);
+          setFechaFin(next.fechaFin);
+        },
+        {
+          keepFields: ["selectedLoteId"],
+          initialState: {
+            selectedLoteId: null,
+            tipoToma: "fenologica",
+            tomasFenologicas: "",
+            tomasConteo: "",
+            tomasCalibracion: "",
+            fechaInicio: "",
+            fechaFin: "",
+          },
+        }
+      );
       return;
     }
 
@@ -270,7 +302,38 @@ const CrearTomaScreen: React.FC = () => {
     if (error) return Alert.alert("Error Supabase", JSON.stringify(error));
 
     Alert.alert("Éxito", `Toma creada (${codigo})`);
-    navigation.goBack();
+    handlePostSaveReset(
+      {
+        selectedLoteId,
+        tipoToma,
+        tomasFenologicas,
+        tomasConteo,
+        tomasCalibracion,
+        fechaInicio,
+        fechaFin,
+      },
+      (next) => {
+        setSelectedLoteId(next.selectedLoteId);
+        setTipoToma(next.tipoToma);
+        setTomasFenologicas(next.tomasFenologicas);
+        setTomasConteo(next.tomasConteo);
+        setTomasCalibracion(next.tomasCalibracion);
+        setFechaInicio(next.fechaInicio);
+        setFechaFin(next.fechaFin);
+      },
+      {
+        keepFields: ["selectedLoteId"],
+        initialState: {
+          selectedLoteId: null,
+          tipoToma: "fenologica",
+          tomasFenologicas: "",
+          tomasConteo: "",
+          tomasCalibracion: "",
+          fechaInicio: "",
+          fechaFin: "",
+        },
+      }
+    );
   };
 
   /* -------------------------------------------------------------

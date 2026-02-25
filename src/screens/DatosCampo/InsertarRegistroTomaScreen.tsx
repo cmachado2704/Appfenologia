@@ -21,6 +21,7 @@ import { getCurrentPosition } from "../../utils/location";
 import { CatalogCache } from "../../utils/catalogCache";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fetchClimaYUbicacion } from "../../services/climaService";
+import { handlePostSaveReset } from "../../utils/postSaveReset";
 
 const normalizeKey = (value?: string) =>
   value
@@ -503,9 +504,50 @@ const InsertarRegistroTomaScreen: React.FC = () => {
 
       Alert.alert("Éxito", "Registros guardados correctamente.");
 
-      setPlanta("");
-      setRamas(Array.from({ length: MAX_RAMAS }, () => ({ n_rama: "" })));
-      setObservaciones("");
+      handlePostSaveReset(
+        {
+          zonaSeleccionada,
+          fila,
+          orientacionSeleccionada,
+          observaciones,
+          planta,
+          ramas,
+          foto1,
+          foto2,
+          clima,
+          selectedToma,
+          searchTerm,
+        },
+        (next) => {
+          setZonaSeleccionada(next.zonaSeleccionada);
+          setFila(next.fila);
+          setOrientacionSeleccionada(next.orientacionSeleccionada);
+          setObservaciones(next.observaciones);
+          setPlanta(next.planta);
+          setRamas(next.ramas);
+          setFoto1(next.foto1);
+          setFoto2(next.foto2);
+          setClima(next.clima);
+          setSelectedToma(next.selectedToma);
+          setSearchTerm(next.searchTerm);
+        },
+        {
+          keepFields: ["selectedToma", "searchTerm"],
+          initialState: {
+            zonaSeleccionada: null,
+            fila: "",
+            orientacionSeleccionada: null,
+            observaciones: "",
+            planta: "",
+            ramas: Array.from({ length: MAX_RAMAS }, () => ({ n_rama: "" })),
+            foto1: null,
+            foto2: null,
+            clima: null,
+            selectedToma: null,
+            searchTerm: "",
+          },
+        }
+      );
     } catch (e) {
       Alert.alert("Error", "No se pudieron guardar los registros.");
     } finally {

@@ -19,6 +19,8 @@ import { CatalogCache } from "../../utils/catalogCache";
 import { getCurrentPosition } from "../../utils/location";
 import { addToOfflineQueue } from "../../utils/offlineQueue";
 import { fetchClimaYUbicacion } from "../../services/climaService";
+import { handlePostSaveReset } from "../../utils/postSaveReset";
+import CampanaSelect from "../../components/selectors/CampanaSelect";
 
 /* ===== FOTOS (MISMO STACK QUE INSERTARREGISTROTOMASCREEN) ===== */
 import { tomarFoto } from "../../utils/photoPicker";
@@ -312,15 +314,95 @@ const nombreLoteSeguro =
         });
       }
       Alert.alert("Guardado offline", "Se sincronizará al recuperar la red.");
+      handlePostSaveReset(
+        {
+          campania,
+          fechaEval,
+          sector,
+          lado,
+          registros,
+          foto1,
+          foto2,
+          clima,
+          selectedToma,
+          searchField,
+        },
+        (next) => {
+          setCampania(next.campania);
+          setFechaEval(next.fechaEval);
+          setSector(next.sector);
+          setLado(next.lado);
+          setRegistros(next.registros);
+          setFoto1(next.foto1);
+          setFoto2(next.foto2);
+          setClima(next.clima);
+          setSelectedToma(next.selectedToma);
+          setSearchField(next.searchField);
+        },
+        {
+          keepFields: ["selectedToma", "searchField"],
+          initialState: {
+            campania: "",
+            fechaEval: null,
+            sector: "",
+            lado: "",
+            registros: [{ n_planta: "", fila: "", n_frutos_caidos: "", calibre_min: "", calibre_max: "" }],
+            foto1: null,
+            foto2: null,
+            clima: null,
+            selectedToma: null,
+            searchField: "",
+          },
+        }
+      );
       setLoading(false);
-      navigation.goBack();
       return;
     }
 
     await supabase.from("conteo_frutos_caidos").insert(payloads);
     Alert.alert("Éxito", "Registros guardados");
+    handlePostSaveReset(
+      {
+        campania,
+        fechaEval,
+        sector,
+        lado,
+        registros,
+        foto1,
+        foto2,
+        clima,
+        selectedToma,
+        searchField,
+      },
+      (next) => {
+        setCampania(next.campania);
+        setFechaEval(next.fechaEval);
+        setSector(next.sector);
+        setLado(next.lado);
+        setRegistros(next.registros);
+        setFoto1(next.foto1);
+        setFoto2(next.foto2);
+        setClima(next.clima);
+        setSelectedToma(next.selectedToma);
+        setSearchField(next.searchField);
+      },
+      {
+        keepFields: ["selectedToma", "searchField"],
+        initialState: {
+          campania: "",
+          fechaEval: null,
+          sector: "",
+          lado: "",
+          registros: [{ n_planta: "", fila: "", n_frutos_caidos: "", calibre_min: "", calibre_max: "" }],
+          foto1: null,
+          foto2: null,
+          clima: null,
+          selectedToma: null,
+          searchField: "",
+        },
+      }
+    );
     setLoading(false);
-    navigation.goBack();
   };
 
   /* ================= UI ================= */
@@ -407,14 +489,7 @@ const nombreLoteSeguro =
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Datos principales</Text>
         
-            <Text style={styles.label}>Campaña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="2024-2025"
-              value={campania}
-              onChangeText={setCampania}
-              placeholderTextColor="#666"
-            />
+            <CampanaSelect value={campania} onChange={setCampania} />
 
             <Text style={styles.label}>Fecha evaluación</Text>
             <TouchableOpacity

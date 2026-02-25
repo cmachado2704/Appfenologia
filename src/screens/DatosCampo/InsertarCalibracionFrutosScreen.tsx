@@ -19,6 +19,8 @@ import { CatalogCache } from "../../utils/catalogCache";
 import { getCurrentPosition } from "../../utils/location";
 import { addToOfflineQueue } from "../../utils/offlineQueue";
 import { fetchClimaYUbicacion } from "../../services/climaService";
+import { handlePostSaveReset } from "../../utils/postSaveReset";
+import CampanaSelect from "../../components/selectors/CampanaSelect";
 
 /* ===== FOTOS (MISMO STACK YA VALIDADO) ===== */
 import { tomarFoto } from "../../utils/photoPicker";
@@ -371,7 +373,50 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
         if (error) throw error;
 
         Alert.alert("Éxito", "Registros guardados correctamente");
-        navigation.goBack();
+        handlePostSaveReset(
+          {
+            campania,
+            fechaEval,
+            fechaCosecha,
+            sector,
+            observacion,
+            registros,
+            foto1,
+            foto2,
+            clima,
+            selectedToma,
+            searchField,
+          },
+          (next) => {
+            setCampania(next.campania);
+            setFechaEval(next.fechaEval);
+            setFechaCosecha(next.fechaCosecha);
+            setSector(next.sector);
+            setObservacion(next.observacion);
+            setRegistros(next.registros);
+            setFoto1(next.foto1);
+            setFoto2(next.foto2);
+            setClima(next.clima);
+            setSelectedToma(next.selectedToma);
+            setSearchField(next.searchField);
+          },
+          {
+            keepFields: ["selectedToma", "searchField"],
+            initialState: {
+              campania: "",
+              fechaEval: null,
+              fechaCosecha: null,
+              sector: "",
+              observacion: "",
+              registros: [{ n_planta: "", fila: "", clasificacion: null, calibre: "" }],
+              foto1: null,
+              foto2: null,
+              clima: null,
+              selectedToma: null,
+              searchField: "",
+            },
+          }
+        );
       } else {
         for (const item of inserts) {
           await addToOfflineQueue({
@@ -385,7 +430,50 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
           "Los registros se sincronizarán automáticamente cuando vuelva la conexión."
         );
 
-        navigation.goBack();
+        handlePostSaveReset(
+          {
+            campania,
+            fechaEval,
+            fechaCosecha,
+            sector,
+            observacion,
+            registros,
+            foto1,
+            foto2,
+            clima,
+            selectedToma,
+            searchField,
+          },
+          (next) => {
+            setCampania(next.campania);
+            setFechaEval(next.fechaEval);
+            setFechaCosecha(next.fechaCosecha);
+            setSector(next.sector);
+            setObservacion(next.observacion);
+            setRegistros(next.registros);
+            setFoto1(next.foto1);
+            setFoto2(next.foto2);
+            setClima(next.clima);
+            setSelectedToma(next.selectedToma);
+            setSearchField(next.searchField);
+          },
+          {
+            keepFields: ["selectedToma", "searchField"],
+            initialState: {
+              campania: "",
+              fechaEval: null,
+              fechaCosecha: null,
+              sector: "",
+              observacion: "",
+              registros: [{ n_planta: "", fila: "", clasificacion: null, calibre: "" }],
+              foto1: null,
+              foto2: null,
+              clima: null,
+              selectedToma: null,
+              searchField: "",
+            },
+          }
+        );
       }
     } catch (e) {
       console.log(e);
@@ -484,13 +572,7 @@ const InsertarCalibracionFrutosScreen = ({ navigation }: any) => {
             <Text style={styles.sectionTitle}>Datos de calibración</Text>
 
             {/* Campaña */}
-            <Text style={styles.label}>Campaña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="2024-2025"
-              value={campania}
-              onChangeText={setCampania}
-            />
+            <CampanaSelect value={campania} onChange={setCampania} />
 
             {/* Fecha Evaluación */}
             <Text style={styles.label}>Fecha evaluación *</Text>
