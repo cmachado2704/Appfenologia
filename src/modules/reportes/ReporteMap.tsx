@@ -79,21 +79,27 @@ const parseGeomToPolygonRings = (geom: any): Array<Array<{ latitude: number; lon
 
 const getLoteBaseColor = (variedad?: string | null) => {
   const v = (variedad || "").trim().toUpperCase();
+
+  // PALTOS → verde agrícola visible sobre satélite
   if (v === "PALTOS") {
     return {
-      fill: "rgba(46,125,50,0.32)",
-      stroke: "rgba(27,94,32,0.95)",
+      fill: "rgba(56,142,60,0.38)",     // verde translúcido visible
+      stroke: "rgba(27,94,32,1)",       // borde verde fuerte
     };
   }
-  if (v === "CITRICOS") {
+
+  // CÍTRICOS → amarillo cultivo
+  if (v === "CITRICOS" || v === "CÍTRICOS") {
     return {
-      fill: "rgba(251,192,45,0.32)",
-      stroke: "rgba(245,127,23,0.95)",
+      fill: "rgba(255,235,59,0.38)",    // amarillo translúcido
+      stroke: "rgba(245,127,23,1)",     // borde naranja intenso
     };
   }
+
+  // fallback
   return {
-    fill: "rgba(158,158,158,0.32)",
-    stroke: "rgba(97,97,97,0.95)",
+    fill: "rgba(158,158,158,0.25)",
+    stroke: "rgba(97,97,97,0.9)",
   };
 };
 
@@ -208,13 +214,22 @@ const ReporteMap: React.FC<ReporteMapProps> = ({
             : baseColor.stroke;
 
           return rings.map((coords, idx) => (
-            <Polygon
-              key={`${lote.nombre_lote}-${idx}`}
-              coordinates={coords}
-              fillColor={fillColor}
-              strokeColor={strokeColor}
-              strokeWidth={2}
-            />
+           <Polygon
+  key={`${lote.nombre_lote}-${idx}`}
+  coordinates={coords}
+  fillColor={
+    isSelected
+      ? "rgba(255,255,255,0.15)" // efecto foco
+      : fillColor
+  }
+  strokeColor={
+    isSelected
+      ? "#000000" // borde negro fuerte
+      : strokeColor
+  }
+  strokeWidth={isSelected ? 4 : 2}
+  strokeDashPattern={isSelected ? [12, 6] : undefined}
+/>
           ));
         })}
 

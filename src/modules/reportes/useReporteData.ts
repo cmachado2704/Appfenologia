@@ -18,7 +18,6 @@ const procesoToFechaColumn = {
 type LoteRow = {
   id_lote?: string;
   nombre_lote: string;
-  codigo_lote?: string | null;
   variedad?: string | null;
   latitud: number | null;
   longitud: number | null;
@@ -38,101 +37,125 @@ export const useReporteData = (filtros: ReporteFiltros) => {
   const [cultivos, setCultivos] = useState<string[]>([]);
   const [metrics, setMetrics] = useState<ReporteMetric[]>([]);
 
+  // -------------------------
+  // CARGAR LOTES
+  // -------------------------
   useEffect(() => {
     const loadCatalogos = async () => {
-      const { data: lotesData } = await supabase
+      const { data } = await supabase
         .from("lotes")
-        .select("id_lote, nombre_lote, codigo_lote, variedad, latitud, longitud, geom")
+        .select("id_lote, nombre_lote, variedad, latitud, longitud, geom")
         .order("nombre_lote");
 
-      const lotesRows = (lotesData || []) as LoteRow[];
-      setAllLotes(lotesRows);
+      const rows = (data || []) as LoteRow[];
+      setAllLotes(rows);
 
-      const uniqueVariedades = Array.from(
+      const variedades = Array.from(
         new Set(
-          lotesRows
-            .map((l) => (l.variedad || "").trim())
-            .filter((v) => v.length > 0)
+          rows.map((l) => (l.variedad || "").trim()).filter(Boolean)
         )
       ).sort();
 
-      setCultivos(uniqueVariedades);
+      setCultivos(variedades);
     };
 
     loadCatalogos();
   }, []);
 
+  // -------------------------
+  // FILTRO DE LOTES
+  // -------------------------
   const visibleLotes = useMemo(() => {
     if (!filtros.cultivo) return allLotes;
-    return allLotes.filter((l) => (l.variedad || "").trim() === filtros.cultivo);
+    return allLotes.filter(
+      (l) => (l.variedad || "").trim() === filtros.cultivo
+    );
   }, [allLotes, filtros.cultivo]);
 
+  // -------------------------
+  // CARGAR REGISTROS
+  // -------------------------
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const table = procesoToTable[filtros.proceso];
-        const fechaColumn = procesoToFechaColumn[filtros.proceso];
+        const procesos =
+          filtros.proceso === "todos"
+            ? ["fenologia", "calibracion", "conteo"]
+            : [filtros.proceso];
 
-        let query = supabase
-          .from(table)
-          .select(`latitud,longitud,${fechaColumn},nombre_lote,codigo_lote`)
-          .not("latitud", "is", null)
-          .not("longitud", "is", null);
+        let allData: ReporteRegistro[] = [];
 
-        if (filtros.lote) {
-          query = query.eq("nombre_lote", filtros.lote);
+        for (const p of procesos) {
+          const table = procesoToTable[p as keyof typeof procesoToTable];
+          const fechaColumn =
+            procesoToFechaColumn[p as keyof typeof procesoToFechaColumn];
+
+          let query = supabase
+            .from(table)
+            .select(`latitud,longitud,${fechaColumn},nombre_lote`)
+            .not("latitud", "is", null)
+            .not("longitud", "is", null);
+
+          if (filtros.lote) {
+            query = query.eq("nombre_lote", filtros.lote);
+          }
+
+          const { data, error } = await query;
+          if (error) throw error;
+
+          const normalized: ReporteRegistro[] = ((data || []) as any[])
+            .map((row) => {
+              const lat = Number(row.latitud);
+              const lng = Number(row.longitud);
+              if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+              return {
+                lat,
+                lng,
+                loteNombre:
+                  row.nombre_lote?.trim() || "Sin lote",
+                proceso: p as Exclude<
+                  typeof filtros.proceso,
+                  "todos"
+                >,
+                fecha: row[fechaColumn] ?? null,
+              };
+            })
+            .filter(Boolean) as ReporteRegistro[];
+
+          allData.push(...normalized);
         }
 
-        const { data, error: dbError } = await query;
-        if (dbError) throw dbError;
-
-        const lotesByCodigo = new Map(
-          allLotes
-            .filter((l) => l.codigo_lote)
-            .map((l) => [String(l.codigo_lote), l.nombre_lote])
+        // filtro cultivo
+        const visibleNames = new Set(
+          visibleLotes.map((l) => l.nombre_lote)
         );
 
-        const visibleLoteNames = new Set(visibleLotes.map((l) => l.nombre_lote));
+        allData = allData.filter((r) =>
+          r.loteNombre === "Sin lote"
+            ? !filtros.cultivo
+            : visibleNames.has(r.loteNombre)
+        );
 
-        let normalized: ReporteRegistro[] = ((data || []) as any[])
-          .map((row) => {
-            const lat = Number(row.latitud);
-            const lng = Number(row.longitud);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-
-            const loteNombreDirecto =
-              typeof row.nombre_lote === "string" && row.nombre_lote.trim().length
-                ? row.nombre_lote.trim()
-                : null;
-
-            const loteNombrePorCodigo =
-              row.codigo_lote != null
-                ? lotesByCodigo.get(String(row.codigo_lote)) || String(row.codigo_lote)
-                : null;
-
-            return {
-              lat,
-              lng,
-              loteNombre: loteNombreDirecto || loteNombrePorCodigo || "Sin lote",
-              proceso: filtros.proceso,
-              fecha: row[fechaColumn] ?? null,
-            } as ReporteRegistro;
-          })
-          .filter(Boolean) as ReporteRegistro[];
-
-        normalized = normalized.filter((r) => {
-          if (r.loteNombre === "Sin lote") return !filtros.cultivo;
-          return visibleLoteNames.has(r.loteNombre);
-        });
-
+        // filtro lote
         if (filtros.lote) {
-          normalized = normalized.filter((r) => r.loteNombre === filtros.lote);
+          allData = allData.filter(
+            (r) => r.loteNombre === filtros.lote
+          );
         }
 
-        setRegistros(normalized);
+        setRegistros(allData);
+
+        // -------------------------
+        // METRICS (solo cuando no es "todos")
+        // -------------------------
+        if (filtros.proceso === "todos") {
+          setMetrics([]);
+          return;
+        }
 
         const lotesForMetrics = filtros.lote
           ? [filtros.lote]
@@ -141,64 +164,67 @@ export const useReporteData = (filtros: ReporteFiltros) => {
         let metricRows: ReporteMetric[] = [];
 
         if (filtros.proceso === "fenologia") {
-          let mQuery = supabase
+          let q = supabase
             .from("tomas_fenologicas")
-            .select("nombre_lote,es_estado,avg_cantidad:cantidad.avg()")
+            .select("nombre_lote,es_estado,avg:cantidad.avg()")
             .not("cantidad", "is", null);
 
           if (lotesForMetrics.length) {
-            mQuery = mQuery.in("nombre_lote", lotesForMetrics);
+            q = q.in("nombre_lote", lotesForMetrics);
           }
 
-          const { data: mData } = await mQuery;
-          metricRows = ((mData || []) as any[])
-            .map((row) => ({
-              key:
-                filtros.lote
-                  ? row.es_estado || "Sin estado"
-                  : `${row.nombre_lote || "Sin lote"} - ${row.es_estado || "Sin estado"}`,
-              value: Number(row.avg_cantidad || 0),
+          const { data } = await q;
+
+          metricRows = ((data || []) as any[])
+            .map((r) => ({
+              key: filtros.lote
+                ? r.es_estado || "Sin estado"
+                : `${r.nombre_lote} - ${r.es_estado || "Sin estado"}`,
+              value: Number(r.avg || 0),
             }))
             .filter((r) => Number.isFinite(r.value));
         }
 
         if (filtros.proceso === "calibracion") {
-          let mQuery = supabase
+          let q = supabase
             .from("calibracion_frutos")
-            .select("nombre_lote,clasificacion,avg_calibre:calibre.avg()")
+            .select("nombre_lote,clasificacion,avg:calibre.avg()")
             .not("calibre", "is", null);
 
           if (lotesForMetrics.length) {
-            mQuery = mQuery.in("nombre_lote", lotesForMetrics);
+            q = q.in("nombre_lote", lotesForMetrics);
           }
 
-          const { data: mData } = await mQuery;
-          metricRows = ((mData || []) as any[])
-            .map((row) => ({
-              key:
-                filtros.lote
-                  ? row.clasificacion || "Sin clasificacion"
-                  : `${row.nombre_lote || "Sin lote"} - ${row.clasificacion || "Sin clasificacion"}`,
-              value: Number(row.avg_calibre || 0),
+          const { data } = await q;
+
+          metricRows = ((data || []) as any[])
+            .map((r) => ({
+              key: filtros.lote
+                ? r.clasificacion || "Sin clasificacion"
+                : `${r.nombre_lote} - ${r.clasificacion || "Sin clasificacion"}`,
+              value: Number(r.avg || 0),
             }))
             .filter((r) => Number.isFinite(r.value));
         }
 
         if (filtros.proceso === "conteo") {
-          let mQuery = supabase
+          let q = supabase
             .from("conteo_frutos_caidos")
-            .select("nombre_lote,avg_conteo:n_frutos_caidos.avg()")
+            .select("nombre_lote,avg:n_frutos_caidos.avg()")
             .not("n_frutos_caidos", "is", null);
 
           if (lotesForMetrics.length) {
-            mQuery = mQuery.in("nombre_lote", lotesForMetrics);
+            q = q.in("nombre_lote", lotesForMetrics);
           }
 
-          const { data: mData } = await mQuery;
-          metricRows = ((mData || []) as any[])
-            .map((row) => ({
-              key: filtros.lote ? "avg_n_frutos_caidos" : row.nombre_lote || "Sin lote",
-              value: Number(row.avg_conteo || 0),
+          const { data } = await q;
+
+          metricRows = ((data || []) as any[])
+            .map((r) => ({
+              key: filtros.lote
+                ? "avg_n_frutos_caidos"
+                : r.nombre_lote || "Sin lote",
+              value: Number(r.avg || 0),
             }))
             .filter((r) => Number.isFinite(r.value));
         }
@@ -213,10 +239,21 @@ export const useReporteData = (filtros: ReporteFiltros) => {
       }
     };
 
-    load();
-  }, [filtros, allLotes, visibleLotes]);
+    if (allLotes.length) load();
+  }, [filtros, allLotes]);
 
-  const clusters: ReporteCluster[] = useMemo(() => clusterPoints(registros), [registros]);
+  const clusters: ReporteCluster[] = useMemo(
+    () => clusterPoints(registros),
+    [registros]
+  );
 
-  return { loading, error, registros, clusters, cultivos, lotes: visibleLotes, metrics };
+  return {
+    loading,
+    error,
+    registros,
+    clusters,
+    cultivos,
+    lotes: visibleLotes,
+    metrics,
+  };
 };

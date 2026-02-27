@@ -1,4 +1,4 @@
-export type ProcesoReporte = "fenologia" | "calibracion" | "conteo";
+export type ProcesoReporte = "fenologia" | "calibracion" | "conteo" | "todos";
 
 export type ReporteFiltros = {
   proceso: ProcesoReporte;
@@ -10,7 +10,7 @@ export type ReporteRegistro = {
   lat: number;
   lng: number;
   loteNombre: string;
-  proceso: ProcesoReporte;
+  proceso: Exclude<ProcesoReporte, "todos">;
   fecha: string | null;
 };
 

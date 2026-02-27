@@ -10,7 +10,7 @@ type ReporteFiltersProps = {
   lotes: Array<{ nombre_lote: string }>;
 };
 
-const procesos: ProcesoReporte[] = ["fenologia", "calibracion", "conteo"];
+const procesos: ProcesoReporte[] = ["todos", "fenologia", "calibracion", "conteo"];
 
 const ReporteFilters: React.FC<ReporteFiltersProps> = ({
   filtros,
@@ -28,7 +28,9 @@ const ReporteFilters: React.FC<ReporteFiltersProps> = ({
             onPress={() => setFiltros((prev) => ({ ...prev, proceso }))}
           >
             <Text style={[styles.tabText, filtros.proceso === proceso && styles.tabTextActive]}>
-              {proceso}
+              {proceso === "todos"
+  ? "Todos"
+  : proceso.charAt(0).toUpperCase() + proceso.slice(1)}
             </Text>
           </TouchableOpacity>
         ))}
