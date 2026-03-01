@@ -103,8 +103,8 @@ export const useReporteData = (filtros: ReporteFiltros) => {
             query = query.eq("nombre_lote", filtros.lote);
           }
 
-          const { data, error } = await query;
-          if (error) throw error;
+          const { data, error: queryError } = await query;
+          if (queryError) throw queryError;
 
           const normalized: ReporteRegistro[] = ((data || []) as any[])
             .map((row) => {
@@ -240,12 +240,27 @@ export const useReporteData = (filtros: ReporteFiltros) => {
     };
 
     if (allLotes.length) load();
-  }, [filtros, allLotes]);
+  }, [allLotes.length, filtros, visibleLotes]);
 
   const clusters: ReporteCluster[] = useMemo(
     () => clusterPoints(registros),
     [registros]
   );
+
+  useEffect(() => {
+    const fenologiaCount = registros.filter((r) => r.proceso === "fenologia").length;
+    const calibracionCount = registros.filter((r) => r.proceso === "calibracion").length;
+    const conteoCount = registros.filter((r) => r.proceso === "conteo").length;
+
+    console.debug("[ReporteDebug]", {
+      filtros,
+      fenologiaCount,
+      calibracionCount,
+      conteoCount,
+      filteredCount: registros.length,
+      clustersCount: clusters.length,
+    });
+  }, [clusters.length, filtros, registros]);
 
   return {
     loading,
