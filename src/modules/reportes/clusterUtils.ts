@@ -32,6 +32,7 @@ export const clusterPoints = (
   points.forEach((point) => {
     const found = clusters.find(
       (cluster) =>
+        cluster.registros[0]?.proceso === point.proceso &&
         distanceMeters(cluster.lat, cluster.lng, point.lat, point.lng) <=
         toleranceMeters
     );

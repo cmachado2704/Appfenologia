@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import MapView, { Callout, Marker, Polygon, Region } from "react-native-maps";
-import { ReporteCluster } from "./types";
+import { ProcesoReporte, ReporteCluster } from "./types";
 
 type ReporteMapProps = {
   clusters: ReporteCluster[];
@@ -16,11 +16,13 @@ type ReporteMapProps = {
   }>;
 };
 
-const markerColorByProceso = {
+const markerColorByProceso: Record<Exclude<ProcesoReporte, "todos">, string> = {
   fenologia: "#2e7d32",
   calibracion: "#1976d2",
   conteo: "#ef6c00",
-} as const;
+};
+
+const neutralClusterColor = "#616161";
 
 const defaultPeruRegion: Region = {
   latitude: -9.19,
@@ -80,23 +82,20 @@ const parseGeomToPolygonRings = (geom: any): Array<Array<{ latitude: number; lon
 const getLoteBaseColor = (variedad?: string | null) => {
   const v = (variedad || "").trim().toUpperCase();
 
-  // PALTOS → verde agrícola visible sobre satélite
   if (v === "PALTOS") {
     return {
-      fill: "rgba(56,142,60,0.38)",     // verde translúcido visible
-      stroke: "rgba(27,94,32,1)",       // borde verde fuerte
+      fill: "rgba(56,142,60,0.38)",
+      stroke: "rgba(27,94,32,1)",
     };
   }
 
-  // CÍTRICOS → amarillo cultivo
   if (v === "CITRICOS" || v === "CÍTRICOS") {
     return {
-      fill: "rgba(255,235,59,0.38)",    // amarillo translúcido
-      stroke: "rgba(245,127,23,1)",     // borde naranja intenso
+      fill: "rgba(255,235,59,0.38)",
+      stroke: "rgba(245,127,23,1)",
     };
   }
 
-  // fallback
   return {
     fill: "rgba(158,158,158,0.25)",
     stroke: "rgba(97,97,97,0.9)",
@@ -128,32 +127,6 @@ const ReporteMap: React.FC<ReporteMapProps> = ({
     return match?.nombre_lote || null;
   }, [lotes, selectedLoteCoords]);
 
-  const visibleClusters = useMemo(() => {
-    if (!loteNameByCoords) return clusters;
-    return clusters.filter((c) => c.registros[0]?.loteNombre === loteNameByCoords);
-  }, [clusters, loteNameByCoords]);
-
-  const fallbackClusters = useMemo<ReporteCluster[]>(() => {
-    if (visibleClusters.length > 0) return visibleClusters;
-
-    return lotes
-      .filter((l) => l.latitud != null && l.longitud != null)
-      .map((l) => ({
-        lat: Number(l.latitud),
-        lng: Number(l.longitud),
-        total: 0,
-        registros: [
-          {
-            lat: Number(l.latitud),
-            lng: Number(l.longitud),
-            loteNombre: l.nombre_lote,
-            proceso: "fenologia",
-            fecha: null,
-          },
-        ],
-      }));
-  }, [visibleClusters, lotes]);
-
   const initialRegion = useMemo<Region>(() => {
     if (
       selectedLoteCoords?.latitud != null &&
@@ -179,17 +152,17 @@ const ReporteMap: React.FC<ReporteMapProps> = ({
       };
     }
 
-    if (fallbackClusters.length > 0) {
+    if (clusters.length > 0) {
       return {
-        latitude: fallbackClusters[0].lat,
-        longitude: fallbackClusters[0].lng,
+        latitude: clusters[0].lat,
+        longitude: clusters[0].lng,
         latitudeDelta: 0.2,
         longitudeDelta: 0.2,
       };
     }
 
     return defaultPeruRegion;
-  }, [selectedLoteCoords, lotes, fallbackClusters]);
+  }, [clusters, selectedLoteCoords, lotes]);
 
   return (
     <View style={styles.wrapper}>
@@ -214,26 +187,28 @@ const ReporteMap: React.FC<ReporteMapProps> = ({
             : baseColor.stroke;
 
           return rings.map((coords, idx) => (
-           <Polygon
-  key={`${lote.nombre_lote}-${idx}`}
-  coordinates={coords}
-  fillColor={
-    isSelected
-      ? "rgba(255,255,255,0.15)" // efecto foco
-      : fillColor
-  }
-  strokeColor={
-    isSelected
-      ? "#000000" // borde negro fuerte
-      : strokeColor
-  }
-  strokeWidth={isSelected ? 4 : 2}
-  strokeDashPattern={isSelected ? [12, 6] : undefined}
-/>
+            <Polygon
+              key={`${lote.nombre_lote}-${idx}`}
+              coordinates={coords}
+              fillColor={
+                isSelected
+                  ? "rgba(255,255,255,0.15)"
+                  : fillColor
+              }
+              strokeColor={
+                isSelected
+                  ? "#000000"
+                  : strokeColor
+              }
+              strokeWidth={isSelected ? 4 : 2}
+              strokeDashPattern={isSelected ? [12, 6] : undefined}
+            />
           ));
         })}
 
-        {fallbackClusters.map((cluster, idx) => {
+        {clusters.map((cluster, idx) => {
+          const procesos = new Set(cluster.registros.map((r) => r.proceso));
+          const clusterIsMixed = procesos.size > 1;
           const firstProcess = cluster.registros[0]?.proceso || "fenologia";
           const firstFecha = cluster.registros[0]?.fecha ?? null;
           const monthLabel = formatMonthYear(firstFecha);
@@ -247,8 +222,9 @@ const ReporteMap: React.FC<ReporteMapProps> = ({
                 style={[
                   styles.dot,
                   {
-                    backgroundColor:
-                      markerColorByProceso[firstProcess as keyof typeof markerColorByProceso],
+                    backgroundColor: clusterIsMixed
+                      ? neutralClusterColor
+                      : markerColorByProceso[firstProcess],
                   },
                 ]}
               />

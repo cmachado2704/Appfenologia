@@ -3,7 +3,6 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { View } from "react-native";
 
 import InicioScreen from "../screens/InicioScreen";
 import ReportesScreen from "../screens/ReportesScreen";
@@ -22,110 +21,76 @@ const AppNavigator: React.FC<Props> = ({ onLogout }) => {
         <Tab.Navigator
           screenOptions={{
             headerShown: false,
-
+            tabBarLabelPosition: "below-icon",
             tabBarItemStyle: {
+              flex: 1,
               justifyContent: "center",
               alignItems: "center",
             },
-
             tabBarIconStyle: {
-              width: 30,
-              height: 26,
               justifyContent: "center",
               alignItems: "center",
-              marginBottom: -2,
             },
-
             tabBarLabelStyle: {
               fontSize: 13,
               fontWeight: "600",
-              marginTop: -2,
+              textAlign: "center",
             },
-
             tabBarStyle: {
               backgroundColor: "#1e4020",
               borderTopWidth: 0,
-              height: 68,
-              paddingBottom: 8,
-              paddingTop: 6,
+              height: 66,
+              paddingVertical: 8,
               elevation: 12,
             },
-
             tabBarActiveTintColor: "#ffffff",
             tabBarInactiveTintColor: "#9abfa4",
           }}
         >
-
-          {/* 🟢 INICIO */}
           <Tab.Screen
             name="Inicio"
             options={{
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="sprout" size={22} color={color} />
-                </View>
-              ),
+              tabBarIcon: ({ color }) => <Icon name="sprout" size={22} color={color} />,
             }}
           >
             {() => <InicioScreen onLogout={onLogout} />}
           </Tab.Screen>
 
-          {/* 🟢 PROCESOS */}
           <Tab.Screen
             name="Procesos"
             component={GestionTomasStack}
             options={{
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="file-tree" size={22} color={color} />
-                </View>
-              ),
+              tabBarIcon: ({ color }) => <Icon name="file-tree" size={22} color={color} />,
             }}
           />
 
-          {/* 🔵 DATOS CAMPO (OCULTO – YA NO RESERVA ESPACIO) */}
           <Tab.Screen
             name="DatosCampo"
             component={DatosCampoStack}
             options={{
               tabBarButton: () => null,
-              tabBarStyle: { display: "none" },  // 🔥 ELIMINA ESPACIO FANTASMA
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="account-hard-hat" size={22} color={color} />
-                </View>
-              ),
+              tabBarStyle: { display: "none" },
+              tabBarIcon: ({ color }) => <Icon name="account-hard-hat" size={22} color={color} />,
             }}
           />
 
-          {/* 🔵 CONSULTAS (OCULTO – YA NO RESERVA ESPACIO) */}
           <Tab.Screen
             name="ConsultasMantenedores"
             component={ConsultasMantenedoresStack}
             options={{
               tabBarButton: () => null,
-              tabBarStyle: { display: "none" }, // 🔥 ELIMINA ESPACIO FANTASMA
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="database-cog" size={22} color={color} />
-                </View>
-              ),
+              tabBarStyle: { display: "none" },
+              tabBarIcon: ({ color }) => <Icon name="database-cog" size={22} color={color} />,
             }}
           />
 
-          {/* 🟢 REPORTES */}
           <Tab.Screen
             name="Reportes"
             component={ReportesScreen}
             options={{
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="chart-line" size={22} color={color} />
-                </View>
-              ),
+              tabBarIcon: ({ color }) => <Icon name="chart-line" size={22} color={color} />,
             }}
           />
-
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaView>
