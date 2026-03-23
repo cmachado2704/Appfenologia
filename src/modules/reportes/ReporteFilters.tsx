@@ -43,7 +43,11 @@ const ReporteFilters: React.FC<ReporteFiltersProps> = ({
           dropdownIconColor="#234d20"
           selectedValue={filtros.cultivo ?? ""}
           onValueChange={(value) =>
-            setFiltros((prev) => ({ ...prev, cultivo: value ? String(value) : null }))
+            setFiltros((prev) => ({
+              ...prev,
+              cultivo: value ? String(value) : null,
+              lote: null,
+            }))
           }
         >
           <Picker.Item label="Todos" value="" />

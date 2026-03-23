@@ -2,13 +2,14 @@ import React, { useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import ReporteFilters from "../modules/reportes/ReporteFilters";
 import ReporteMap from "../modules/reportes/ReporteMap";
+import { ReporteFiltros } from "../modules/reportes/types";
 import { useReporteData } from "../modules/reportes/useReporteData";
 
 const ReportesScreen = () => {
-  const [filtros, setFiltros] = useState({
-    proceso: "fenologia" as "fenologia" | "calibracion" | "conteo",
-    cultivo: null as string | null,
-    lote: null as string | null,
+  const [filtros, setFiltros] = useState<ReporteFiltros>({
+    proceso: "fenologia",
+    cultivo: null,
+    lote: null,
   });
 
   const { loading, error, clusters, cultivos, lotes } = useReporteData(filtros);

@@ -1,9 +1,9 @@
 import React from "react";
+import { StyleSheet, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { View } from "react-native";
 
 import InicioScreen from "../screens/InicioScreen";
 import ReportesScreen from "../screens/ReportesScreen";
@@ -15,121 +15,123 @@ const Tab = createBottomTabNavigator();
 
 type Props = { onLogout: () => void };
 
+const TabIcon = ({ name, color }: { name: string; color: string }) => (
+  <View style={styles.iconWrap}>
+    <Icon name={name} size={22} color={color} />
+  </View>
+);
+
 const AppNavigator: React.FC<Props> = ({ onLogout }) => {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#234d20" }}>
+    <SafeAreaView style={styles.safeArea}>
       <NavigationContainer>
         <Tab.Navigator
           screenOptions={{
             headerShown: false,
-
-            tabBarItemStyle: {
-              justifyContent: "center",
-              alignItems: "center",
-            },
-
-            tabBarIconStyle: {
-              width: 30,
-              height: 26,
-              justifyContent: "center",
-              alignItems: "center",
-              marginBottom: -2,
-            },
-
-            tabBarLabelStyle: {
-              fontSize: 13,
-              fontWeight: "600",
-              marginTop: -2,
-            },
-
-            tabBarStyle: {
-              backgroundColor: "#1e4020",
-              borderTopWidth: 0,
-              height: 68,
-              paddingBottom: 8,
-              paddingTop: 6,
-              elevation: 12,
-            },
-
+            tabBarLabelPosition: "below-icon",
+            tabBarShowLabel: true,
+            tabBarItemStyle: styles.tabItem,
+            tabBarIconStyle: styles.tabIcon,
+            tabBarLabelStyle: styles.tabLabel,
+            tabBarStyle: styles.tabBar,
             tabBarActiveTintColor: "#ffffff",
             tabBarInactiveTintColor: "#9abfa4",
+            tabBarAllowFontScaling: false,
           }}
         >
-
-          {/* 🟢 INICIO */}
           <Tab.Screen
             name="Inicio"
             options={{
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="sprout" size={22} color={color} />
-                </View>
-              ),
+              tabBarIcon: ({ color }) => <TabIcon name="sprout" color={color} />,
             }}
           >
             {() => <InicioScreen onLogout={onLogout} />}
           </Tab.Screen>
 
-          {/* 🟢 PROCESOS */}
           <Tab.Screen
             name="Procesos"
             component={GestionTomasStack}
             options={{
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="file-tree" size={22} color={color} />
-                </View>
-              ),
+              tabBarIcon: ({ color }) => <TabIcon name="file-tree" color={color} />,
             }}
           />
 
-          {/* 🔵 DATOS CAMPO (OCULTO – YA NO RESERVA ESPACIO) */}
           <Tab.Screen
             name="DatosCampo"
             component={DatosCampoStack}
             options={{
               tabBarButton: () => null,
-              tabBarStyle: { display: "none" },  // 🔥 ELIMINA ESPACIO FANTASMA
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="account-hard-hat" size={22} color={color} />
-                </View>
-              ),
+              tabBarItemStyle: styles.hiddenTabItem,
+              tabBarIcon: ({ color }) => <TabIcon name="account-hard-hat" color={color} />,
             }}
           />
 
-          {/* 🔵 CONSULTAS (OCULTO – YA NO RESERVA ESPACIO) */}
           <Tab.Screen
             name="ConsultasMantenedores"
             component={ConsultasMantenedoresStack}
             options={{
               tabBarButton: () => null,
-              tabBarStyle: { display: "none" }, // 🔥 ELIMINA ESPACIO FANTASMA
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="database-cog" size={22} color={color} />
-                </View>
-              ),
+              tabBarItemStyle: styles.hiddenTabItem,
+              tabBarIcon: ({ color }) => <TabIcon name="database-cog" color={color} />,
             }}
           />
 
-          {/* 🟢 REPORTES */}
           <Tab.Screen
             name="Reportes"
             component={ReportesScreen}
             options={{
-              tabBarIcon: ({ color }) => (
-                <View style={{ width: 30, alignItems: "center" }}>
-                  <Icon name="chart-line" size={22} color={color} />
-                </View>
-              ),
+              tabBarIcon: ({ color }) => <TabIcon name="chart-line" color={color} />,
             }}
           />
-
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaView>
   );
 };
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#234d20",
+  },
+  tabBar: {
+    backgroundColor: "#1e4020",
+    borderTopWidth: 0,
+    height: 68,
+    paddingTop: 6,
+    paddingBottom: 6,
+    elevation: 12,
+  },
+  tabItem: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 0,
+  },
+  hiddenTabItem: {
+    display: "none",
+  },
+  tabIcon: {
+    marginTop: 0,
+    marginBottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  tabLabel: {
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 0,
+    marginBottom: 0,
+    includeFontPadding: false,
+  },
+  iconWrap: {
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
 
 export default AppNavigator;
